@@ -51,12 +51,6 @@ export function TodayPlanView({
   const macroMode = apiSlots.length >= 3 ? "fullDayTargets" : "totalsOnly";
 
   const startNewPlan = async () => {
-    const ok =
-      typeof window !== "undefined" &&
-      window.confirm(
-        "Bạn đã có thực đơn hôm nay. Lên plan mới sẽ xóa bản đã lưu cho ngày này. Tiếp tục?",
-      );
-    if (!ok) return;
     setBusy(true);
     try {
       await deleteConfirmedPlansForDateKey(localDateKey());
@@ -150,7 +144,7 @@ export function TodayPlanView({
           disabled={busy}
           onClick={() => void startNewPlan()}
         >
-          {busy ? "Đang xóa…" : "Lên plan mới"}
+          {busy ? "Đang chuẩn bị…" : "Lên plan mới"}
         </Button>
       </div>
     </>
