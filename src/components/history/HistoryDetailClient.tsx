@@ -14,12 +14,12 @@ import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { buildCookAgainPayloadFromDoc, writeCookAgainPayload } from "@/lib/plan/cook-again";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
-import { sumDayTotals } from "@/lib/plan/day-insulin";
-import { insulinSpikeAbbrev, insulinSpikeTextClass } from "@/lib/plan/day-insulin";
 import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
+import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
-import { cn } from "@/lib/utils";
 import type { HealthProfileDoc } from "@/types/health-profile";
+
+const ALL_API_SLOTS: ApiMealTime[] = ["morning", "lunch", "dinner"];
 
 export function HistoryDetailClient({ docId }: { docId: string }) {
   const router = useRouter();
@@ -50,18 +50,12 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
     });
   }, []);
 
-  const apiSlots = useMemo(() => {
-    if (!row) return [] as ApiMealTime[];
-    return Object.keys(row.data.slots).filter((k) => row.data.slots[k as ApiMealTime]) as ApiMealTime[];
+  const hasFullDay = useMemo(() => {
+    if (!row) return false;
+    return ALL_API_SLOTS.every((t) => row.data.slots[t]?.meal != null);
   }, [row]);
 
-  const selectedMeals = useMemo(() => {
-    if (!row) return [];
-    return apiSlots.map((s) => row.data.slots[s]!.meal);
-  }, [row, apiSlots]);
-
-  const dayTotals = useMemo(() => sumDayTotals(selectedMeals), [selectedMeals]);
-  const macroMode = apiSlots.length >= 3 ? "fullDayTargets" : "totalsOnly";
+  const macroMode = hasFullDay ? "fullDayTargets" : "totalsOnly";
   const macroTargetsDay = useMemo(() => {
     const base = healthProfile ?? ({
       nutritionGoalIds: ["eat_clean_skin"],
@@ -114,7 +108,7 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
 
   const d = row.data;
   const summaryTitle =
-    macroMode === "fullDayTargets" ? "Cả ngày" : "Tổng các bữa đã chọn";
+    macroMode === "fullDayTargets" ? "Tóm tắt dinh dưỡng" : "Tổng các bữa đã chọn";
 
   return (
     <div className="bg-background min-h-0 flex-1 pb-24">
@@ -154,43 +148,47 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
         </div>
 
         <Card>
-          <CardHeader className="space-y-1">
+          <CardHeader className="space-y-1 pb-2">
             <p className="text-muted-foreground text-sm font-normal">{formatDateKeyVi(d.dateKey)}</p>
-            <p className="text-foreground text-base font-medium">{summaryTitle}</p>
+            <CardTitle className="text-base font-medium leading-snug">{summaryTitle}</CardTitle>
             <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
-              ~{Math.round(dayTotals.calories)} kcal
+              {macroMode === "fullDayTargets"
+                ? `~${Math.round(d.dayTotals.calories)} kcal đã lưu`
+                : `~${Math.round(d.dayTotals.calories)} kcal · chưa so với mục tiêu cả ngày`}
             </p>
           </CardHeader>
           <CardContent>
-            <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode={macroMode} />
+            <MacroProgressBars totals={d.dayTotals} targets={macroTargetsDay} mode={macroMode} />
           </CardContent>
         </Card>
 
-        <div>
-          <p className="text-foreground mt-2 mb-3 text-base font-medium">Từng bữa</p>
-          <div className="space-y-4">
-            {apiSlots.map((slot) => {
+        <div className="space-y-3">
+          <p className="text-foreground text-base font-medium">Các bữa</p>
+          <div className="space-y-3">
+            {ALL_API_SLOTS.map((slot) => {
               const entry = d.slots[slot];
               if (!entry?.meal) return null;
               return (
                 <div
                   key={slot}
-                  className="border-border mb-4 rounded-lg border p-4 last:mb-0"
+                  className="border-border rounded-lg border p-4"
                 >
-                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                    {API_SLOT_VI[slot]}
-                  </p>
-                  {entry.is_reheated ? (
-                    <p className="text-muted-foreground mt-1 text-xs font-normal">Hâm lại / từ tủ lạnh</p>
-                  ) : null}
-                  <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
-                  <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
-                    ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
-                    {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g · I{" "}
-                    <span className={cn("font-normal", insulinSpikeTextClass(entry.meal.insulin_spike))}>
-                      {insulinSpikeAbbrev(entry.meal.insulin_spike)}
-                    </span>
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                        {API_SLOT_VI[slot]}
+                      </p>
+                      {entry.is_reheated ? (
+                        <p className="text-muted-foreground mt-1 text-xs font-normal">Hâm lại / từ tủ lạnh</p>
+                      ) : null}
+                      <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
+                      <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
+                        ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
+                        {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
+                      </p>
+                    </div>
+                    <InsulinSpikeBadge value={entry.meal.insulin_spike} className="shrink-0" />
+                  </div>
                   {entry.recipe?.steps?.length ? (
                     <div className="mt-5">
                       <p className="text-muted-foreground mb-3 text-sm font-medium">Các bước</p>
@@ -210,10 +208,12 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
         </div>
 
         {d.shoppingNote ? (
-          <div className="border-border mt-6 rounded-lg border bg-muted/30 p-3">
-            <p className="text-foreground mb-1 text-sm font-medium">Ghi chú mua sắm</p>
-            <p className="text-muted-foreground text-sm font-normal whitespace-pre-wrap">{d.shoppingNote}</p>
-          </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Ghi chú mua sắm</CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground text-sm whitespace-pre-wrap">{d.shoppingNote}</CardContent>
+          </Card>
         ) : null}
 
         {d.prep_instructions ? (
