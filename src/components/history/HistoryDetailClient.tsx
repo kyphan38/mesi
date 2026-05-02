@@ -76,7 +76,7 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
     const payload = buildCookAgainPayloadFromDoc(row.id, row.data);
     writeCookAgainPayload(payload);
     router.push("/?cookAgain=1");
-    show("Đã chuyển về trang chủ — kiểm tra nguyên liệu rồi bấm Lên thực đơn.", "info");
+    show("Đã chuyển về trang chủ - kiểm tra nguyên liệu rồi bấm Lên thực đơn.", "info");
   };
 
   if (row === undefined) {

@@ -54,7 +54,7 @@ function supplementReminder(draft: PlanDraftV1): string {
   return p.supplements
     .map((s) => {
       const hint = getSupplementTimingHint(s.id);
-      return hint ? `${s.label} — ${hint}` : s.label;
+      return hint ? `${s.label} - ${hint}` : s.label;
     })
     .join(" • ");
 }
@@ -424,7 +424,7 @@ function PlanWizard({
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Gợi ý nhẹ</CardTitle>
                   <CardDescription>
-                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm — hoặc giữ nguyên nếu ổn.
+                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm - hoặc giữ nguyên nếu ổn.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
@@ -526,7 +526,7 @@ function PlanWizard({
                   <ul className="text-muted-foreground list-inside list-disc space-y-1">
                     {shopping.suggestions.map((s, i) => (
                       <li key={i}>
-                        <span className="text-foreground">{s.ingredient}</span> — {s.reason}
+                        <span className="text-foreground">{s.ingredient}</span> - {s.reason}
                       </li>
                     ))}
                   </ul>

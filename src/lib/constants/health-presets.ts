@@ -1,4 +1,4 @@
-/** UI + seed labels — stable preset IDs stored in Firestore. */
+/** UI + seed labels - stable preset IDs stored in Firestore. */
 
 export type AvoidFoodPreset = { id: string; label: string };
 
@@ -30,7 +30,7 @@ export const SUPPLEMENT_PRESETS: SupplementPreset[] = [
   { id: "probiotic", label: "Probiotic" },
 ];
 
-/** Shown on plan + AI context — not user-editable in profile (chips only). */
+/** Shown on plan + AI context - not user-editable in profile (chips only). */
 const SUPPLEMENT_TIMING_BY_ID: Record<string, string> = {
   fish_oil: "Uống sau bữa có chất béo (sáng hoặc trưa)",
   vitamin_c: "Uống giữa buổi sáng hoặc sau bữa trưa",

@@ -62,7 +62,7 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
             <CardTitle className="text-lg">
               {docs.length} ngày · {formatDateKeyVi(first.data.dateKey)} → {formatDateKeyVi(last.data.dateKey)}
             </CardTitle>
-            <CardDescription>Từng ngày được lưu riêng — chạm để xem chi tiết.</CardDescription>
+            <CardDescription>Từng ngày được lưu riêng - chạm để xem chi tiết.</CardDescription>
           </CardHeader>
           {prepText ? (
             <CardContent className="text-muted-foreground text-sm whitespace-pre-wrap">{prepText}</CardContent>

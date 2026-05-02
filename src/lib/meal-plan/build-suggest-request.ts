@@ -86,7 +86,7 @@ export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMeals
 
   return {
     ingredients:
-      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn — gợi ý món linh hoạt)"],
+      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn - gợi ý món linh hoạt)"],
     meals,
     servings: Math.max(1, Math.min(99, servings)),
     health_profile: buildHealthProfilePayload(profile),

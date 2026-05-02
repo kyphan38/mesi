@@ -10,7 +10,7 @@ export type TasteContext = {
   disliked_meal_names: string[];
 };
 
-/** POST /api/ai/suggest-meals — request shape */
+/** POST /api/ai/suggest-meals - request shape */
 export type SuggestMealsRequest = {
   ingredients: string[];
   meals: { time: ApiMealTime; effort: MealEffort }[];

@@ -27,7 +27,7 @@ function ratingLabel(r: MealDocWithId["data"]["rating"]): string | null {
   if (r === "good") return "Ngon";
   if (r === "neutral") return "BT";
   if (r === "bad") return "Chưa hợp";
-  if (r === "skipped") return "—";
+  if (r === "skipped") return "-";
   return null;
 }
 
@@ -220,7 +220,7 @@ export function HistoryListClient() {
                   <Card className="hover:bg-muted/30 border-primary/30 transition-colors duration-150">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base">
-                        Meal prep {item.docs.length} ngày — {formatDateKeyVi(first.data.dateKey)} →{" "}
+                        Meal prep {item.docs.length} ngày - {formatDateKeyVi(first.data.dateKey)} →{" "}
                         {formatDateKeyVi(last.data.dateKey)}
                       </CardTitle>
                       <CardDescription>

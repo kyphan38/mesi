@@ -37,7 +37,7 @@ function supplementReminderFromDraft(draft: MealPrepPlanDraftV1): string {
   return p.supplements
     .map((s) => {
       const hint = getSupplementTimingHint(s.id);
-      return hint ? `${s.label} — ${hint}` : s.label;
+      return hint ? `${s.label} - ${hint}` : s.label;
     })
     .join(" • ");
 }

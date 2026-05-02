@@ -1,7 +1,7 @@
 /**
  * API / baseline keys for prompts and client-side day evaluation.
  *
- * primaryNutritionGoalKey — deliberate simplification: first Firestore id only;
+ * primaryNutritionGoalKey - deliberate simplification: first Firestore id only;
  * blending multi-goal baselines is TBD.
  */
 
@@ -18,7 +18,7 @@ const FIRESTORE_TO_API: Record<string, ApiNutritionGoalKey> = {
   maintain_weight: "maintain_weight",
 };
 
-/** Pick primary goal from Firestore `nutritionGoalIds` — see module comment above. */
+/** Pick primary goal from Firestore `nutritionGoalIds` - see module comment above. */
 export function primaryNutritionGoalKey(nutritionGoalIds: string[]): ApiNutritionGoalKey {
   const first = nutritionGoalIds[0]?.trim();
   if (first && FIRESTORE_TO_API[first]) return FIRESTORE_TO_API[first]!;
@@ -30,7 +30,7 @@ export function baselinePromptBlock(goal: ApiNutritionGoalKey): string {
   switch (goal) {
     case "clear_skin":
       return [
-        "MỤC TIÊU BASELINE (da/sạch — tham chiếu khi thiết kế bữa):",
+        "MỤC TIÊU BASELINE (da/sạch - tham chiếu khi thiết kế bữa):",
         "- Protein tổng ngày ≥ 60g",
         "- Chất béo lành (ưu tiên olive/dầu cá/mè, tránh trans) ≥ 30g tổng",
         "- Calo ngày khoảng 1800–2200 kcal (ước lượng theo khẩu phần)",

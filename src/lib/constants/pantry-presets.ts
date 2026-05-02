@@ -34,7 +34,7 @@ export const FRUIT_PRESETS: PantryPreset[] = [
   { id: "lemon", label: "Chanh" },
 ];
 
-/** Empty — only user-added items appear under "Khác". */
+/** Empty - only user-added items appear under "Khác". */
 export const OTHER_PRESETS: PantryPreset[] = [];
 
 export type PantryCategory = "protein" | "vegetable" | "carb" | "fruit" | "other";

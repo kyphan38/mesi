@@ -735,7 +735,7 @@ export function HomeScreen() {
             <label className="border-border flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
               <div>
                 <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
-                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
+                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa - sau khi xong bạn lưu cả lịch.</p>
               </div>
               <input
                 type="checkbox"

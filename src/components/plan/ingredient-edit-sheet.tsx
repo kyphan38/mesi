@@ -87,7 +87,7 @@ export function IngredientEditSheet({
           </button>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-          <p className="text-muted-foreground text-xs">Nguyên liệu — xóa dòng hoặc thêm mới</p>
+          <p className="text-muted-foreground text-xs">Nguyên liệu - xóa dòng hoặc thêm mới</p>
           <ul className="space-y-2">
             {lines.map((line, idx) => (
               <li

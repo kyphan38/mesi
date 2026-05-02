@@ -40,7 +40,7 @@ export function aggregateFromMeals(meals: MealOption[]): InsulinSpikeLabel {
 
 export type GlycemicLoadLevel = "low" | "medium" | "high";
 
-/** True if any meal has high GL — drives mild starch warning on summary. */
+/** True if any meal has high GL - drives mild starch warning on summary. */
 export function anyHighGlycemicLoad(meals: MealOption[]): boolean {
   return meals.some((m) => m.glycemic_load === "high");
 }
