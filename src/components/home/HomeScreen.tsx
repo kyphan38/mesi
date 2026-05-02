@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { History, Settings, User } from "lucide-react";
+import { History, User } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RatingPromptBanner } from "@/components/home/RatingPromptBanner";
@@ -60,6 +61,19 @@ const EFFORT_OPTIONS: { id: Effort; label: string }[] = [
   { id: "high", label: "Kỳ công (>30 phút)" },
 ];
 
+/** Compact labels for native select / one-line UI */
+const EFFORT_SELECT_LABEL: Record<Effort, string> = {
+  quick: "Nhanh (<15p)",
+  medium: "Vừa (15–30p)",
+  high: "Kỳ công (>30p)",
+};
+
+const SLOT_EMOJI: Record<MealSlot, string> = {
+  morning: "☀️",
+  afternoon: "🌤️",
+  evening: "🌙",
+};
+
 export function HomeScreen() {
   const router = useRouter();
   const { show } = useToast();
@@ -93,6 +107,9 @@ export function HomeScreen() {
   const [ratingBusy, setRatingBusy] = useState(false);
   const [mealPrepMode, setMealPrepMode] = useState(false);
   const [prepDayCount, setPrepDayCount] = useState(3);
+
+  /** Blocking API errors — toast chỉ cho validation ngắn, không trùng banner. */
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const refreshMeta = useCallback(async () => {
     try {
@@ -234,6 +251,7 @@ export function HomeScreen() {
       return;
     }
 
+    setApiError(null);
     if (fromQuick) setLoadingQuick(true);
     else setLoadingMenu(true);
     try {
@@ -254,7 +272,7 @@ export function HomeScreen() {
       const json = (await res.json()) as { ok?: boolean; error?: string; data?: SuggestMealsParsed };
 
       if (!res.ok || !json.ok || !json.data) {
-        show(json.error ?? `Lỗi ${res.status}`, "error");
+        setApiError(json.error ?? `Lỗi ${res.status}`);
         return;
       }
 
@@ -269,7 +287,7 @@ export function HomeScreen() {
       show(fromQuick ? "Đang mở gợi ý…" : "Đang mở gợi ý…", "info");
       router.push("/plan");
     } catch (e) {
-      show(e instanceof Error ? e.message : "Không gọi được API.", "error");
+      setApiError(e instanceof Error ? e.message : "Không gọi được API.");
     } finally {
       setLoadingMenu(false);
       setLoadingQuick(false);
@@ -282,6 +300,7 @@ export function HomeScreen() {
       show("Chọn ít nhất một buổi để lên meal prep.", "error");
       return;
     }
+    setApiError(null);
     setLoadingPrep(true);
     try {
       const profile = (await getHealthProfile()) ?? getDefaultHealthProfile();
@@ -302,7 +321,7 @@ export function HomeScreen() {
       const json = (await res.json()) as { ok?: boolean; error?: string; data?: SuggestMealPrepParsed };
 
       if (!res.ok || !json.ok || !json.data) {
-        show(json.error ?? `Lỗi ${res.status}`, "error");
+        setApiError(json.error ?? `Lỗi ${res.status}`);
         return;
       }
 
@@ -318,7 +337,7 @@ export function HomeScreen() {
       show("Đang mở meal prep…", "info");
       router.push("/plan/prep");
     } catch (e) {
-      show(e instanceof Error ? e.message : "Không gọi được API.", "error");
+      setApiError(e instanceof Error ? e.message : "Không gọi được API.");
     } finally {
       setLoadingPrep(false);
     }
@@ -360,7 +379,7 @@ export function HomeScreen() {
         type="button"
         onClick={() => togglePantry(p.id, p.label)}
         className={cn(
-          "relative rounded-full border px-3 py-2 text-left text-sm transition-colors",
+          "relative min-h-11 rounded-full border px-3 py-2 text-left text-sm transition-colors",
           on
             ? "border-primary bg-primary text-primary-foreground"
             : "border-border bg-card text-foreground hover:bg-muted",
@@ -408,29 +427,39 @@ export function HomeScreen() {
         <div className="flex items-center gap-1">
           <Link
             href="/history"
-            className="text-muted-foreground hover:text-foreground inline-flex h-10 w-10 items-center justify-center rounded-lg"
+            className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
             aria-label="Lịch sử"
           >
             <History className="size-5" />
           </Link>
           <Link
-            href="/profile"
-            className="text-muted-foreground hover:text-foreground inline-flex h-10 w-10 items-center justify-center rounded-lg"
-            aria-label="Hồ sơ"
+            href="/profile#cai-dat"
+            className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
+            aria-label="Hồ sơ và cài đặt"
           >
             <User className="size-5" />
-          </Link>
-          <Link
-            href="/settings"
-            className="text-muted-foreground hover:text-foreground inline-flex h-10 w-10 items-center justify-center rounded-lg"
-            aria-label="Cài đặt"
-          >
-            <Settings className="size-5" />
           </Link>
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-[430px] space-y-6 px-4 py-4 pb-10">
+      <div
+        className="mx-auto w-full max-w-[430px] space-y-6 scroll-pb-32 px-4 py-4 pb-28"
+        style={{ scrollPaddingBottom: "max(7rem, env(safe-area-inset-bottom))" }}
+      >
+        {apiError ? (
+          <Alert variant="destructive" className="relative pr-10">
+            <AlertTitle>Không tạo được gợi ý</AlertTitle>
+            <AlertDescription className="text-destructive/90">{apiError}</AlertDescription>
+            <button
+              type="button"
+              className="text-destructive ring-offset-background focus:ring-ring absolute top-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+              onClick={() => setApiError(null)}
+              aria-label="Đóng"
+            >
+              ×
+            </button>
+          </Alert>
+        ) : null}
         <RatingPromptBanner
           doc={ratingDoc}
           busy={ratingBusy}
@@ -459,7 +488,7 @@ export function HomeScreen() {
         ) : null}
 
         <section className="space-y-3">
-          <label className="border-border flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
+          <label className="border-border flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
             <div>
               <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
               <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
@@ -556,25 +585,22 @@ export function HomeScreen() {
                 <span className="text-foreground font-medium">{MEAL_LABELS[slot]}</span>
               </label>
               {mealOn[slot] ? (
-                <div className="mt-3 flex flex-col gap-2">
-                  <span className="text-muted-foreground text-xs">Mức effort</span>
-                  <div className="flex flex-wrap gap-2">
+                <div className="mt-2 flex min-h-11 items-center gap-2">
+                  <span className="shrink-0 text-base select-none" aria-hidden>
+                    {SLOT_EMOJI[slot]}
+                  </span>
+                  <select
+                    value={effort[slot]}
+                    onChange={(e) => setEffortFor(slot, e.target.value as Effort)}
+                    aria-label={`Mức nấu ${MEAL_LABELS[slot]}`}
+                    className="border-input bg-background text-foreground focus-visible:ring-ring flex h-11 min-h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+                  >
                     {EFFORT_OPTIONS.map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        onClick={() => setEffortFor(slot, o.id)}
-                        className={cn(
-                          "rounded-lg border px-2.5 py-2 text-left text-xs",
-                          effort[slot] === o.id
-                            ? "border-primary bg-primary/10 ring-ring ring-1"
-                            : "border-border bg-muted/40",
-                        )}
-                      >
-                        {o.label}
-                      </button>
+                      <option key={o.id} value={o.id}>
+                        {EFFORT_SELECT_LABEL[o.id]}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
               ) : null}
             </div>
@@ -614,7 +640,7 @@ export function HomeScreen() {
                     type="button"
                     onClick={() => toggleCustomTag(c.id, c.label)}
                     className={cn(
-                      "rounded-full border px-3 py-2 text-sm",
+                      "min-h-11 rounded-full border px-3 py-2 text-sm",
                       on
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-card",

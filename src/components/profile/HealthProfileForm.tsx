@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   NUTRITION_GOALS,
   SUPPLEMENT_PRESETS,
 } from "@/lib/constants/health-presets";
+import { getFirebaseAuth } from "@/lib/auth/firebase-client";
 import {
   getDefaultHealthProfile,
   getHealthProfile,
@@ -62,6 +64,7 @@ export function HealthProfileForm({
   const [customSupps, setCustomSupps] = useState<CustomSuppRow[]>([]);
   const [customSuppLabel, setCustomSuppLabel] = useState("");
   const [waterLiters, setWaterLiters] = useState(2);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const applyDoc = useCallback((doc: HealthProfileDoc) => {
     setExistingSetupAt(doc.setupCompletedAt);
@@ -246,6 +249,20 @@ export function HealthProfileForm({
     }
   };
 
+  const handleLogout = async () => {
+    if (!window.confirm("Đăng xuất khỏi Mesi?")) return;
+    setLoggingOut(true);
+    try {
+      await signOut(getFirebaseAuth());
+      router.replace("/login");
+      router.refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Không đăng xuất được.", "error");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-muted-foreground flex min-h-[30vh] items-center justify-center text-sm">
@@ -255,12 +272,17 @@ export function HealthProfileForm({
   }
 
   return (
-    <form onSubmit={(e) => void onSubmit(e)} className="mx-auto w-full max-w-lg space-y-8 px-4 py-6">
+    <>
+      <form
+        id="cai-dat"
+        onSubmit={(e) => void onSubmit(e)}
+        className="mx-auto w-full max-w-lg space-y-8 px-4 py-6"
+      >
       {showIntro ? (
         <div className="space-y-1">
           <h1 className="text-foreground text-2xl font-semibold tracking-tight">Hồ sơ sức khỏe</h1>
           <p className="text-muted-foreground text-sm">
-            Điền một lần — có thể chỉnh lại trong Cài đặt bất cứ lúc nào.
+            Điền một lần — chỉnh lại bất cứ lúc trong tab Hồ sơ.
           </p>
         </div>
       ) : null}
@@ -516,9 +538,22 @@ export function HealthProfileForm({
         </div>
       </section>
 
-      <Button type="submit" className="min-h-12 w-full text-base sm:min-h-9" disabled={saving}>
-        {saving ? "Đang lưu…" : "Lưu hồ sơ"}
-      </Button>
-    </form>
+        <Button type="submit" className="min-h-12 w-full text-base sm:min-h-9" disabled={saving}>
+          {saving ? "Đang lưu…" : "Lưu hồ sơ"}
+        </Button>
+      </form>
+
+      <div className="border-border mx-auto mt-12 w-full max-w-lg border-t px-4 pt-8 pb-10">
+        <Button
+          type="button"
+          variant="destructive"
+          className="min-h-12 w-full text-base"
+          disabled={loggingOut}
+          onClick={() => void handleLogout()}
+        >
+          {loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
+        </Button>
+      </div>
+    </>
   );
 }

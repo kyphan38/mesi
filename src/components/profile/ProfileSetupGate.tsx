@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getHealthProfile } from "@/lib/db/firestore";
+import { ProfileGateSkeleton } from "@/components/shell/app-loading-skeleton";
 
 type ProfileSetupGateProps = {
   children: React.ReactNode;
@@ -35,11 +36,7 @@ function NonProfileGate({ children }: ProfileSetupGateProps) {
   }, [router]);
 
   if (pending) {
-    return (
-      <div className="flex min-h-[40vh] flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
-        Đang tải…
-      </div>
-    );
+    return <ProfileGateSkeleton />;
   }
 
   return <>{children}</>;

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { History as HistoryIcon, SmilePlus } from "lucide-react";
+import { History as HistoryIcon, SmilePlus, UtensilsCrossed } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
@@ -33,18 +34,39 @@ function passesGoodFilter(item: HistoryListItem): boolean {
   return item.docs.some((d) => d.data.rating === "good");
 }
 
+function HistoryCardSkeleton() {
+  return (
+    <Card className="overflow-hidden border-transparent">
+      <CardHeader className="pb-2">
+        <div className="bg-muted h-5 w-48 animate-pulse rounded-md" />
+        <div className="bg-muted mt-2 h-4 w-32 animate-pulse rounded-md" />
+      </CardHeader>
+      <CardContent className="space-y-2 pt-0">
+        <div className="flex gap-2">
+          <div className="bg-muted h-6 w-14 animate-pulse rounded-full" />
+          <div className="bg-muted h-6 w-14 animate-pulse rounded-full" />
+        </div>
+        <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
+      </CardContent>
+    </Card>
+  );
+}
+
 export function HistoryListClient() {
   const [rows, setRows] = useState<MealDocWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [onlyGood, setOnlyGood] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const r = await listConfirmedMealsForHistory({ limit: 100 });
       setRows(r);
     } catch (e) {
       console.error(e);
+      setLoadError(e instanceof Error ? e.message : "Không tải được lịch sử.");
     } finally {
       setLoading(false);
     }
@@ -76,14 +98,27 @@ export function HistoryListClient() {
         <span className="w-12" />
       </header>
 
-      <div className="mx-auto w-full max-w-[430px] space-y-4 px-4 py-4 pb-10">
+      <div className="mx-auto w-full max-w-[430px] space-y-4 px-4 py-4 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+        {loadError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Không tải được lịch sử</AlertTitle>
+            <AlertDescription className="flex flex-col gap-2">
+              <span>{loadError}</span>
+              <Button type="button" variant="secondary" size="sm" className="mt-1 w-fit" onClick={() => void refresh()}>
+                Thử lại
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         <div className="flex items-center justify-between gap-2">
           <p className="text-muted-foreground text-xs">Đánh dấu “ngon” để Mesi học khẩu vị.</p>
           <Button
             type="button"
             variant={onlyGood ? "default" : "outline"}
             size="sm"
-            className="gap-1"
+            className="min-h-11 gap-1"
+            disabled={loading || !!loadError}
             onClick={() => setOnlyGood((x) => !x)}
           >
             <SmilePlus className="size-4" />
@@ -92,17 +127,27 @@ export function HistoryListClient() {
         </div>
 
         {loading ? (
-          <p className="text-muted-foreground py-10 text-center text-sm">Đang tải…</p>
-        ) : filtered.length === 0 ? (
-          <div className="flex min-h-[45vh] flex-col items-center justify-center gap-4 text-center">
-            <p className="text-muted-foreground text-sm">
-              {onlyGood ? "Chưa có món được đánh dấu ngon." : "Chưa có thực đơn đã lưu."}
+          <div className="space-y-3">
+            {[0, 1, 2, 3].map((i) => (
+              <HistoryCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : filtered.length === 0 && !loadError ? (
+          <div className="flex min-h-[45vh] flex-col items-center justify-center gap-4 px-2 text-center">
+            <UtensilsCrossed className="text-muted-foreground size-14 opacity-60" aria-hidden />
+            <p className="text-foreground text-base font-medium">
+              {onlyGood ? "Chưa có món được đánh dấu ngon" : "Chưa có thực đơn đã lưu"}
+            </p>
+            <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
+              {onlyGood
+                ? "Đánh giá “Ngon” sau khi ăn để Mesi nhớ khẩu vị của bạn."
+                : "Lên thực đơn từ trang chủ — các bữa đã lưu sẽ xuất hiện ở đây."}
             </p>
             <Link href="/" className={buttonVariants({ variant: "secondary" })}>
               Về trang chủ
             </Link>
           </div>
-        ) : (
+        ) : loadError ? null : (
           <div className="space-y-3">
             {filtered.map((item) => {
               if (item.kind === "single") {
@@ -110,7 +155,7 @@ export function HistoryListClient() {
                 const cal = d.data.dayTotals?.calories;
                 return (
                   <Link key={d.id} href={`/history/${d.id}`} className="block">
-                    <Card className="hover:bg-muted/30 transition-colors">
+                    <Card className="hover:bg-muted/30 transition-colors duration-150">
                       <CardHeader className="pb-2">
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -153,7 +198,7 @@ export function HistoryListClient() {
               const calSum = item.docs.reduce((a, b) => a + (b.data.dayTotals?.calories ?? 0), 0);
               return (
                 <Link key={item.batchId} href={`/history/prep/${item.batchId}`} className="block">
-                  <Card className="hover:bg-muted/30 border-primary/30 transition-colors">
+                  <Card className="hover:bg-muted/30 border-primary/30 transition-colors duration-150">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base">
                         Meal prep {item.docs.length} ngày — {formatDateKeyVi(first.data.dateKey)} →{" "}

@@ -7,6 +7,7 @@ import type {
   TasteContext,
 } from "@/lib/ai/types/meal-api";
 import type { MealOption } from "@/lib/ai/validators/meals";
+import { seasonContextPromptBlock } from "@/lib/season/vietnam-season";
 
 export type HealthProfilePayload = SuggestMealsRequest["health_profile"];
 
@@ -56,7 +57,7 @@ export function buildCoreHealthSystemInstruction(hp: HealthProfilePayload): stri
     "",
     `MỤC TIÊU DINH DƯỠNG (khóa API): ${hp.goal}`,
     `ĐANG UỐNG SUPPLEMENT: ${supp} — gợi ý timing uống hợp lý trong plan (có thể tóm tắt trong supplement_plan_hint nếu có).`,
-    "",
+    seasonContextPromptBlock(),
   ].join("\n");
 }
 

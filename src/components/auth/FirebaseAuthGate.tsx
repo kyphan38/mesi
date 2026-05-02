@@ -6,6 +6,7 @@ import { onIdTokenChanged, signOut } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/auth/firebase-client";
 import { hasAllowlistConfig, isAllowedUser } from "@/lib/auth/allowed-user";
 import { awaitRouterReplace } from "@/lib/nav/await-router-replace";
+import { HomeLikeSkeleton } from "@/components/shell/app-loading-skeleton";
 
 type FirebaseAuthGateProps = {
   children: React.ReactNode;
@@ -97,11 +98,7 @@ export function FirebaseAuthGate({ children }: FirebaseAuthGateProps) {
   }, [router, syncServerSession, targetNext]);
 
   if (status !== "ready") {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center p-8 text-sm text-muted-foreground">
-        Checking access...
-      </div>
-    );
+    return <HomeLikeSkeleton />;
   }
 
   return <>{children}</>;
