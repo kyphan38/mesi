@@ -16,11 +16,12 @@ import {
   saveConfirmedPlan,
 } from "@/lib/db/meals";
 import { clearMealPrepDraft, readMealPrepDraft, type MealPrepPlanDraftV1 } from "@/lib/plan/plan-draft";
-import { insulinSpikeAbbrev, sumDayTotals } from "@/lib/plan/day-insulin";
+import { insulinSpikeAbbrev, insulinSpikeTextClass, sumDayTotals } from "@/lib/plan/day-insulin";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { getSupplementTimingHint } from "@/lib/constants/health-presets";
 import { primaryNutritionGoalKey } from "@/lib/meal-plan/nutrition-baseline";
+import { cn } from "@/lib/utils";
 
 function createPrepBatchId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -42,7 +43,7 @@ function supplementReminderFromDraft(draft: MealPrepPlanDraftV1): string {
   return p.supplements
     .map((s) => {
       const hint = getSupplementTimingHint(s.id);
-      return hint ? `${s.label} — ${hint}` : s.label;
+      return hint ? `${s.label} - ${hint}` : s.label;
     })
     .join(" • ");
 }
@@ -163,17 +164,19 @@ function MealPrepSummary({
           <ArrowLeft className="size-4" />
           Trang chủ
         </Link>
-        <span className="text-foreground font-semibold">Meal prep</span>
+        <span className="text-foreground text-base font-medium">Meal prep</span>
       </header>
 
       <div className="mx-auto w-full max-w-[430px] space-y-4 px-4 py-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{prepN} ngày · bắt đầu {formatDateKeyVi(startKey)}</CardTitle>
+            <CardTitle className="text-xl font-medium leading-tight">
+              {prepN} ngày · bắt đầu {formatDateKeyVi(startKey)}
+            </CardTitle>
             <CardDescription>Mục tiêu dinh dưỡng: {primaryGoal}</CardDescription>
           </CardHeader>
           <CardContent className="text-muted-foreground space-y-2 text-sm whitespace-pre-wrap">
-            <p className="text-foreground font-medium">Hướng dẫn prep</p>
+            <p className="text-foreground text-base font-medium">Hướng dẫn prep</p>
             <p>{draft.suggestResult.prep_instructions}</p>
           </CardContent>
         </Card>
@@ -203,7 +206,7 @@ function MealPrepSummary({
           return (
             <Card key={day}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Ngày {day} · {formatDateKeyVi(dateKey)}</CardTitle>
+                <CardTitle className="text-base font-medium">Ngày {day} · {formatDateKeyVi(dateKey)}</CardTitle>
                 <CardDescription>~{Math.round(dayTotals.calories)} kcal</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -216,16 +219,19 @@ function MealPrepSummary({
                       className="border-border rounded-lg border p-2 text-sm"
                     >
                       <p className="text-muted-foreground text-xs">{API_SLOT_VI[r.slot]}</p>
-                      <p className="text-foreground font-medium">{r.meal.name}</p>
+                      <p className="text-foreground text-base font-medium leading-snug">{r.meal.name}</p>
                       {pr ? (
                         <p className="text-muted-foreground mt-0.5 text-xs leading-snug line-clamp-1" title={pr}>
                           {pr}
                         </p>
                       ) : null}
-                      <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
+                      <p className="text-muted-foreground mt-0.5 text-sm font-normal tabular-nums">
                         {KIND_VI[r.meal_kind] ?? r.meal_kind} · ~{Math.round(r.meal.calories)} kcal · P{" "}
                         {Math.round(r.meal.macros.protein_g)}g · C {Math.round(r.meal.macros.carb_g)}g · F{" "}
-                        {Math.round(r.meal.macros.fat_g)}g · I {iShort}
+                        {Math.round(r.meal.macros.fat_g)}g · I{" "}
+                        <span className={cn("font-normal", insulinSpikeTextClass(r.meal.insulin_spike))}>
+                          {iShort}
+                        </span>
                       </p>
                     </div>
                   );
@@ -237,7 +243,7 @@ function MealPrepSummary({
 
         <Button
           type="button"
-          className="bg-primary text-primary-foreground min-h-12 w-full font-semibold"
+          className="bg-primary text-primary-foreground min-h-12 w-full text-sm font-medium"
           disabled={saving}
           onClick={() => void confirmAll()}
         >

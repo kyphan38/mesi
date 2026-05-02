@@ -1,4 +1,4 @@
-/** UI + seed labels — stable preset IDs stored in Firestore. */
+/** UI + seed labels - stable preset IDs stored in Firestore. */
 
 import type { HealthProfileDoc, MacroTargets } from "@/types/health-profile";
 
@@ -74,7 +74,7 @@ export const SUPPLEMENT_PRESETS: SupplementPreset[] = [
   { id: "probiotic", label: "Probiotic" },
 ];
 
-/** Shown on plan + AI context — not user-editable in profile (chips only). */
+/** Shown on plan + AI context - not user-editable in profile (chips only). */
 const SUPPLEMENT_TIMING_BY_ID: Record<string, string> = {
   fish_oil: "Uống sau bữa có chất béo (sáng hoặc trưa)",
   vitamin_c: "Uống giữa buổi sáng hoặc sau bữa trưa",

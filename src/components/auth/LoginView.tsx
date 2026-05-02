@@ -59,7 +59,7 @@ export function LoginView({ appName, subtitle, className }: LoginViewProps) {
             height={40}
             className="mx-auto h-10 w-10 rounded-xl border border-border/80 bg-muted/40 p-1"
           />
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{appName}</h1>
+          <h1 className="text-foreground text-2xl font-medium leading-tight">{appName}</h1>
           <p className="text-sm text-muted-foreground">
             {subtitle ?? "Private workspace. Continue with your Google account."}
           </p>

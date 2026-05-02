@@ -16,7 +16,7 @@ export function tasteContextPromptBlock(ctx: TasteContext): string {
   if (liked.length === 0 && disliked.length === 0) return "";
   const lines = [
     "",
-    "PHẢN HỒI KHẨU VỊ (theo đánh giá trước — ưu tiên phù hợp, không bắt buộc trùng món):",
+    "PHẢN HỒI KHẨU VỊ (theo đánh giá trước - ưu tiên phù hợp, không bắt buộc trùng món):",
   ];
   if (liked.length > 0) {
     lines.push(`User gần đây đánh giá TÍCH CỰC các món kiểu: ${liked.join(", ")}.`);
@@ -29,7 +29,7 @@ export function tasteContextPromptBlock(ctx: TasteContext): string {
 
 function avoidLine(avoid: string[]): string {
   const joined = avoid.filter(Boolean).join(", ");
-  return joined ? `TUYỆT ĐỐI KHÔNG dùng: ${joined}` : "Không có danh sách tránh cụ thể — vẫn tuân thủ nguyên tắc dưới đây.";
+  return joined ? `TUYỆT ĐỐI KHÔNG dùng: ${joined}` : "Không có danh sách tránh cụ thể - vẫn tuân thủ nguyên tắc dưới đây.";
 }
 
 function dailyMacroTargetsBlock(hp: HealthProfilePayload, servings: number): string {
@@ -40,7 +40,7 @@ function dailyMacroTargetsBlock(hp: HealthProfilePayload, servings: number): str
   const c = Math.round(m.carb_g * s);
   const f = Math.round(m.fat_g * s);
   return [
-    "## MỤC TIÊU DINH DƯỠNG CẢ NGÀY (tổng cả nhà — " + s + " người ăn, tham chiếu khi chọn món):",
+    "## MỤC TIÊU DINH DƯỠNG CẢ NGÀY (tổng cả nhà - " + s + " người ăn, tham chiếu khi chọn món):",
     `- Calo: ~${cal} kcal`,
     `- Protein: ≥${p}g`,
     `- Carb: ~${c}g (ưu tiên low-GI)`,
@@ -48,7 +48,7 @@ function dailyMacroTargetsBlock(hp: HealthProfilePayload, servings: number): str
   ].join("\n");
 }
 
-/** Shared dietary rules + profile — prepended to task-specific instructions. */
+/** Shared dietary rules + profile - prepended to task-specific instructions. */
 export function buildCoreHealthSystemInstruction(hp: HealthProfilePayload, servings: number): string {
   const supp =
     hp.supplements.length > 0
@@ -58,7 +58,7 @@ export function buildCoreHealthSystemInstruction(hp: HealthProfilePayload, servi
   return [
     "Bạn là chuyên gia dinh dưỡng Việt Nam. Chỉ trả lời bằng JSON đúng schema user yêu cầu. Không markdown. Tiếng Việt cho các trường văn bản.",
     "",
-    "NGUYÊN TẮC BẮT BUỘC — KHÔNG ĐƯỢC VI PHẠM:",
+    "NGUYÊN TẮC BẮT BUỘC - KHÔNG ĐƯỢC VI PHẠM:",
     avoidLine(hp.avoid),
     "KHÔNG gợi ý món chiên ngập dầu, dầu tái sử dụng, hoặc chứa trans fat.",
     "KHÔNG dùng sữa bò, bơ sữa, phô mai, cream, whey từ sữa bò.",
@@ -83,7 +83,7 @@ export function buildCoreHealthSystemInstruction(hp: HealthProfilePayload, servi
     dailyMacroTargetsBlock(hp, servings),
     "",
     `MỤC TIÊU DINH DƯỠNG (khóa API): ${hp.goal}`,
-    `ĐANG UỐNG SUPPLEMENT: ${supp} — gợi ý timing uống hợp lý trong plan (có thể tóm tắt trong supplement_plan_hint nếu có).`,
+    `ĐANG UỐNG SUPPLEMENT: ${supp} - gợi ý timing uống hợp lý trong plan (có thể tóm tắt trong supplement_plan_hint nếu có).`,
     "",
     "QUY TẮC GỢI Ý UỐNG SUPPLEMENT (khi viết supplement_plan_hint hoặc nhắc user):",
     "Dầu cá (Omega-3): uống sau bữa có chất béo (sáng hoặc trưa).",
@@ -104,21 +104,32 @@ export function buildSuggestMealsSystemInstruction(
     buildCoreHealthSystemInstruction(hp, servings) +
     tasteContextPromptBlock(taste ?? { liked_meal_names: [], disliked_meal_names: [] }) +
     [
-      "NHIỆM VỤ: Gợi ý MÓN ĂN tiếng Việt — chọn lọc vài nguyên liệu phù hợp từ danh sách có sẵn (KHÔNG cần dùng hết), theo effort từng buổi.",
-      "Không tính nutrition_gaps tổng ngày trong response — chỉ gợi ý từng món/bữa.",
+      "NHIỆM VỤ: Gợi ý MÓN ĂN tiếng Việt - chọn lọc vài nguyên liệu phù hợp từ danh sách có sẵn (KHÔNG cần dùng hết), theo effort từng buổi.",
+      "Không tính nutrition_gaps tổng ngày trong response - chỉ gợi ý từng món/bữa.",
       "Với MỖI buổi trong request, trả đúng 3 options.",
-      "Mỗi option gồm: name, description (1 câu), pick_reason (1 câu tiếng Việt, tối đa ~1 dòng, ≤120 ký tự: lợi ích cụ thể của ĐÚNG option này so với 2 option kia trong cùng buổi — no lâu, nhẹ bụng, năng lượng trước tập, v.v.; KHÔNG copy nguyên description), ingredients (chuỗi có khối lượng, VD \"ức gà 150g\"), calories (ước lượng cho số khẩu phần servings), macros { protein_g, carb_g, fat_g }, glycemic_load (low|medium|high), insulin_spike (Thấp|Trung bình|Cao), prep_time_minutes, cooking_method, missing_ingredients (chính hoặc gia vị lớn), fun_fact (\"Có thể bạn chưa biết\" — liên quan sức khỏe/da/dinh dưỡng).",
+      "Mỗi option gồm: name, description (1 câu), pick_reason (1 câu tiếng Việt, tối đa ~1 dòng, ≤120 ký tự: lợi ích cụ thể của ĐÚNG option này so với 2 option kia trong cùng buổi - no lâu, nhẹ bụng, năng lượng trước tập, v.v.; KHÔNG copy nguyên description), ingredients (chuỗi có khối lượng, VD \"ức gà 150g\"), calories (ước lượng cho số khẩu phần servings), macros { protein_g, carb_g, fat_g }, glycemic_load (low|medium|high), insulin_spike (Thấp|Trung bình|Cao), prep_time_minutes, cooking_method, missing_ingredients (chính hoặc gia vị lớn), fun_fact (\"Có thể bạn chưa biết\" - liên quan sức khỏe/da/dinh dưỡng).",
       'Root JSON: { "meals": { "<morning|lunch|dinner>": [option, option, option], ... }, "supplement_plan_hint"?: string }.',
       "Chỉ include keys trong meals cho các buổi được request.",
     ].join("\n")
   );
 }
 
+function formatSuggestPayloadUserMessage(body: SuggestMealsRequest | SuggestMealPrepRequest): string {
+  const { user_note, ...rest } = body;
+  const note = typeof user_note === "string" ? user_note.trim() : "";
+  const lines = ["Payload JSON - tuân thủ và sinh output JSON:", JSON.stringify(rest, null, 2)];
+  if (note) {
+    lines.push(
+      "",
+      "GHI CHÚ CỦA USER (ưu tiên tuân thủ nếu không vi phạm health profile):",
+      JSON.stringify(note),
+    );
+  }
+  return lines.join("\n");
+}
+
 export function buildSuggestMealsUserMessage(body: SuggestMealsRequest): string {
-  return [
-    "Payload JSON — tuân thủ và sinh output JSON:",
-    JSON.stringify(body, null, 2),
-  ].join("\n\n");
+  return formatSuggestPayloadUserMessage(body);
 }
 
 export function buildSuggestMealPrepSystemInstruction(
@@ -143,17 +154,14 @@ export function buildSuggestMealPrepSystemInstruction(
 }
 
 export function buildSuggestMealPrepUserMessage(body: SuggestMealPrepRequest): string {
-  return [
-    "Payload JSON — tuân thủ và sinh output JSON:",
-    JSON.stringify(body, null, 2),
-  ].join("\n\n");
+  return formatSuggestPayloadUserMessage(body);
 }
 
 export function buildAdjustMealSystemInstruction(hp: HealthProfilePayload, servings: number): string {
   return (
     buildCoreHealthSystemInstruction(hp, servings) +
     [
-      "NHIỆM VỤ: User BỎ một hoặc nhiều dòng nguyên liệu khỏi món đã chọn (payload changes.remove — mỗi phần tử phải khớp ĐÚNG một chuỗi trong meal.ingredients).",
+      "NHIỆM VỤ: User BỎ một hoặc nhiều dòng nguyên liệu khỏi món đã chọn (payload changes.remove - mỗi phần tử phải khớp ĐÚNG một chuỗi trong meal.ingredients).",
       "KHÔNG có thêm nguyên liệu do user nhập; KHÔNG yêu cầu user chỉnh gram tay. Có thể điều chỉnh khối lượng các dòng còn lại cho hợp lý với servings.",
       "Giữ cùng hướng món (tinh thần công thức), đổi tên món nếu cần cho đúng thực tế sau khi bỏ thành phần.",
       "Tính lại calories, macros, glycemic_load, insulin_spike, missing_ingredients, description ngắn, pick_reason (cập nhật theo món sau khi bỏ).",
@@ -196,7 +204,7 @@ export function buildShoppingSuggestUserMessage(body: ShoppingSuggestRequestBody
   return JSON.stringify(body, null, 2);
 }
 
-/** Slots derived from request — stable order for validation. */
+/** Slots derived from request - stable order for validation. */
 export function mealTimesFromRequest(meals: { time: ApiMealTime }[]): ApiMealTime[] {
   const seen = new Set<ApiMealTime>();
   const out: ApiMealTime[] = [];
@@ -214,8 +222,8 @@ export function buildRecipeDetailSystemInstruction(hp: HealthProfilePayload, ser
     buildCoreHealthSystemInstruction(hp, servings) +
     [
       "NHIỆM VỤ: Viết công thức nấu tiếng Việt cho một món đã định.",
-      "Nguyên liệu trong payload là danh sách chuỗi — giữ đúng tinh thần porportion cho số khẩu phần servings.",
-      'Root JSON: { "steps": string[] (đánh số trong nội dung hoặc thứ tự mảng), "tips"?: string }.',
+      "Nguyên liệu trong payload là danh sách chuỗi - giữ đúng tinh thần porportion cho số khẩu phần servings.",
+      'Root JSON: { "steps": string[] - mỗi phần tử một câu hoàn chỉnh, KHÔNG tiền tố số thứ tự đầu chuỗi (không "1. ", "2) "); thứ tự chỉ theo mảng, "tips"?: string }.',
       "Không markdown JSON ngoài schema.",
     ].join("\n")
   );
@@ -234,7 +242,7 @@ export function buildSwapMealSystemInstruction(hp: HealthProfilePayload, serving
   return (
     buildCoreHealthSystemInstruction(hp, servings) +
     [
-      "NHIỆM VỤ: Gợi ý MỘT món thay thế (swap) cho buổi ăn đã cho — khác rõ ràng so với món cũ và với MỌI tên trong exclude_meals.",
+      "NHIỆM VỤ: Gợi ý MỘT món thay thế (swap) cho buổi ăn đã cho - khác rõ ràng so với món cũ và với MỌI tên trong exclude_meals.",
       "Không được trùng hoặc gần trùng (cùng tên hoặc biến thể) bất kỳ món trong exclude_meals.",
       "meal phải đủ mọi trường như suggest-meals, gồm pick_reason (1 dòng lợi ích của món mới).",
       "Vẫn dùng nguyên liệu có sẵn (ingredients) và effort; tuân tránh avoid.",

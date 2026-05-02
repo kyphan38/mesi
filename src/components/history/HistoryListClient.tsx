@@ -26,7 +26,7 @@ function ratingLabel(r: MealDocWithId["data"]["rating"]): string | null {
   if (r === "good") return "Ngon";
   if (r === "neutral") return "BT";
   if (r === "bad") return "Chưa hợp";
-  if (r === "skipped") return "—";
+  if (r === "skipped") return "-";
   return null;
 }
 
@@ -115,7 +115,7 @@ export function HistoryListClient() {
           <ArrowLeft className="size-5 shrink-0" aria-hidden />
           Trang chủ
         </Link>
-        <span className="text-foreground inline-flex items-center gap-1 text-lg font-semibold tracking-tight">
+        <span className="text-foreground inline-flex items-center gap-1 text-xl font-medium leading-tight">
           <HistoryIcon className="size-5" />
           Lịch sử
         </span>
@@ -167,7 +167,7 @@ export function HistoryListClient() {
             />
             {rows.length === 0 ? (
               <>
-                <p className="text-foreground text-lg font-medium">Chưa có thực đơn nào</p>
+                <p className="text-foreground text-lg font-medium leading-snug">Chưa có thực đơn nào</p>
                 <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">Lên plan bữa đầu tiên ngay!</p>
                 <Button type="button" className="min-h-11" onClick={() => router.push("/")}>
                   Lên thực đơn
@@ -175,7 +175,7 @@ export function HistoryListClient() {
               </>
             ) : (
               <>
-                <p className="text-foreground text-base font-medium">Chưa có món được đánh dấu ngon</p>
+                <p className="text-foreground text-lg font-medium leading-snug">Chưa có món được đánh dấu ngon</p>
                 <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
                   Đánh giá “Ngon” sau khi ăn để Mesi nhớ khẩu vị của bạn.
                 </p>
@@ -198,8 +198,10 @@ export function HistoryListClient() {
                         <CardHeader className="pb-2">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <CardTitle className="text-base">{formatDateKeyVi(d.data.dateKey)}</CardTitle>
-                              <CardDescription className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                          <CardTitle className="text-sm font-medium leading-snug">
+                                {formatDateKeyVi(d.data.dateKey)}
+                              </CardTitle>
+                          <CardDescription className="mt-1 flex flex-wrap items-center gap-1.5 text-sm tabular-nums text-muted-foreground">
                                 {typeof cal === "number" ? <span>~{Math.round(cal)} kcal</span> : null}
                               </CardDescription>
                             </div>
@@ -213,13 +215,13 @@ export function HistoryListClient() {
                             {slotChips(d.data.slots).map((c) => (
                               <span
                                 key={c}
-                                className="border-border text-muted-foreground rounded-full border px-2 py-0.5 text-xs"
+                                className="border-border text-muted-foreground rounded-full border px-2 py-0.5 text-xs font-medium"
                               >
                                 {c}
                               </span>
                             ))}
                           </div>
-                          <p className="text-foreground line-clamp-2 text-sm">
+                          <p className="text-foreground line-clamp-2 text-base font-medium leading-snug">
                             {Object.values(d.data.slots)
                               .map((s) => s?.meal.name)
                               .filter(Boolean)
@@ -252,8 +254,8 @@ export function HistoryListClient() {
                 <Link key={item.batchId} href={`/history/prep/${item.batchId}`} className="block">
                   <Card className="hover:bg-muted/30 border-primary/30 transition-colors duration-150">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base">
-                        Meal prep {item.docs.length} ngày — {formatDateKeyVi(first.data.dateKey)} →{" "}
+                      <CardTitle className="text-base font-medium leading-snug">
+                        Meal prep {item.docs.length} ngày - {formatDateKeyVi(first.data.dateKey)} →{" "}
                         {formatDateKeyVi(last.data.dateKey)}
                       </CardTitle>
                       <CardDescription>

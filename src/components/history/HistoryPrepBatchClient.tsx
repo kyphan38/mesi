@@ -60,16 +60,16 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
           <ArrowLeft className="size-5 shrink-0" aria-hidden />
           Lịch sử
         </Link>
-        <span className="text-foreground font-semibold">Meal prep</span>
+        <span className="text-foreground text-base font-medium">Meal prep</span>
       </header>
 
       <div className="mx-auto w-full max-w-[430px] space-y-4 px-4 py-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">
+            <CardTitle className="text-xl font-medium leading-tight">
               {docs.length} ngày · {formatDateKeyVi(first.data.dateKey)} → {formatDateKeyVi(last.data.dateKey)}
             </CardTitle>
-            <CardDescription>Từng ngày được lưu riêng — chạm để xem chi tiết.</CardDescription>
+            <CardDescription>Từng ngày được lưu riêng - chạm để xem chi tiết.</CardDescription>
           </CardHeader>
           {prepText ? (
             <CardContent className="text-muted-foreground text-sm whitespace-pre-wrap">{prepText}</CardContent>
@@ -81,8 +81,10 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
             <Link key={d.id} href={`/history/${d.id}`} className="block">
               <Card className="hover:bg-muted/30 transition-colors">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{formatDateKeyVi(d.data.dateKey)}</CardTitle>
-                  <CardDescription>~{Math.round(d.data.dayTotals.calories)} kcal</CardDescription>
+                  <CardTitle className="text-sm font-medium">{formatDateKeyVi(d.data.dateKey)}</CardTitle>
+                  <CardDescription className="text-sm tabular-nums">
+                    ~{Math.round(d.data.dayTotals.calories)} kcal
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="text-muted-foreground line-clamp-2 text-sm">
                   {Object.values(d.data.slots)

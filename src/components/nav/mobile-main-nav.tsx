@@ -43,7 +43,7 @@ export function MobileMainNav() {
               key={href}
               href={href}
               className={cn(
-                "text-muted-foreground flex min-h-11 min-w-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium transition-colors",
+                "text-muted-foreground flex min-h-11 min-w-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-xs font-medium transition-colors",
                 active && "bg-primary/10 text-primary",
               )}
             >

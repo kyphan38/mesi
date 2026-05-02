@@ -35,14 +35,14 @@ export function MacroProgressBars({
 }) {
   if (mode === "totalsOnly") {
     return (
-      <div className={cn("space-y-2", className)}>
+      <div className={cn("divide-y divide-border/50", className)}>
         {ROWS.map(({ key, label, unit }) => {
           const current = totals[key];
           const valueStr = unit === "kcal" ? `${Math.round(current)} kcal` : `${Math.round(current)}g`;
           return (
-            <div key={key} className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium tabular-nums">{valueStr}</span>
+            <div key={key} className="flex justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0">
+              <span className="font-normal text-muted-foreground">{label}</span>
+              <span className="text-foreground text-right font-medium tabular-nums">{valueStr}</span>
             </div>
           );
         })}
@@ -51,7 +51,7 @@ export function MacroProgressBars({
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("divide-y divide-border/50", className)}>
       {ROWS.map(({ key, label, color, unit }) => {
         const current = totals[key];
         const target = Math.max(1, targets[key]);
@@ -62,10 +62,17 @@ export function MacroProgressBars({
             ? `${Math.round(current)}/${Math.round(target)} kcal`
             : `${Math.round(current)}/${Math.round(target)}g`;
         return (
-          <div key={key} className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{label}</span>
-              <span className={cn("font-medium", low && "text-amber-600 dark:text-amber-500")}>{valueStr}</span>
+          <div key={key} className="space-y-1 py-2 first:pt-0 last:pb-0">
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="font-normal text-muted-foreground">{label}</span>
+              <span
+                className={cn(
+                  "text-right font-medium tabular-nums text-foreground",
+                  low && "text-amber-600 dark:text-amber-500",
+                )}
+              >
+                {valueStr}
+              </span>
             </div>
             <div className="bg-muted h-2 overflow-hidden rounded-full">
               <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />

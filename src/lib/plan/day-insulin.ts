@@ -7,6 +7,20 @@ export function insulinSpikeAbbrev(value: InsulinSpikeLabel): string {
   return value === "Trung bình" ? "TB" : value;
 }
 
+/** Text color for insulin level (consistent with InsulinSpikeBadge). */
+export function insulinSpikeTextClass(value: InsulinSpikeLabel): string {
+  switch (value) {
+    case "Thấp":
+      return "text-green-600 dark:text-green-500";
+    case "Trung bình":
+      return "text-amber-600 dark:text-amber-500";
+    case "Cao":
+      return "text-red-600 dark:text-red-500";
+    default:
+      return "";
+  }
+}
+
 const INSULIN_ORDER: Record<InsulinSpikeLabel, number> = {
   Thấp: 0,
   "Trung bình": 1,
@@ -45,7 +59,7 @@ export function aggregateFromMeals(meals: MealOption[]): InsulinSpikeLabel {
 
 export type GlycemicLoadLevel = "low" | "medium" | "high";
 
-/** True if any meal has high GL — drives mild starch warning on summary. */
+/** True if any meal has high GL - drives mild starch warning on summary. */
 export function anyHighGlycemicLoad(meals: MealOption[]): boolean {
   return meals.some((m) => m.glycemic_load === "high");
 }

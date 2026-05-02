@@ -16,9 +16,10 @@ import {
   scaleMacroTargetsByServings,
 } from "@/lib/constants/health-presets";
 import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
-import { sumDayTotals } from "@/lib/plan/day-insulin";
+import { insulinSpikeAbbrev, insulinSpikeTextClass, sumDayTotals } from "@/lib/plan/day-insulin";
 import { clearPlanDraft, readPlanDraft, type PlanDraftV1 } from "@/lib/plan/plan-draft";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
+import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
 import { evaluateDayNutrition } from "@/lib/nutrition/evaluate-day";
 import { primaryNutritionGoalKey } from "@/lib/meal-plan/nutrition-baseline";
 import {
@@ -27,9 +28,9 @@ import {
   saveConfirmedPlan,
 } from "@/lib/db/meals";
 import { IngredientEditSheet } from "@/components/plan/ingredient-edit-sheet";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import { MealOptionCard } from "@/components/plan/meal-option-card";
+import { cn } from "@/lib/utils";
 
 function initOptions(sr: SuggestMealsParsed): Record<ApiMealTime, MealOption[]> {
   const o = {} as Record<ApiMealTime, MealOption[]>;
@@ -54,7 +55,7 @@ function supplementReminder(draft: PlanDraftV1): string {
   return p.supplements
     .map((s) => {
       const hint = getSupplementTimingHint(s.id);
-      return hint ? `${s.label} — ${hint}` : s.label;
+      return hint ? `${s.label} - ${hint}` : s.label;
     })
     .join(" • ");
 }
@@ -373,7 +374,7 @@ function PlanWizard({
           <ArrowLeft className="size-4" />
           Trang chủ
         </Link>
-        <span className="text-foreground pointer-events-none min-w-0 flex-1 truncate text-center text-sm font-semibold">
+        <span className="text-foreground pointer-events-none min-w-0 flex-1 truncate text-center text-base font-medium">
           {step === "options" ? "Chọn món" : "Tóm tắt"}
         </span>
         <Link
@@ -390,7 +391,9 @@ function PlanWizard({
           <>
             {apiSlots.map((slot) => (
               <section key={slot} className="space-y-3">
-                <h2 className="text-foreground text-base font-semibold">{API_SLOT_VI[slot]}</h2>
+                <h2 className="text-muted-foreground mb-3 text-sm font-medium tracking-wide uppercase">
+                  {API_SLOT_VI[slot]}
+                </h2>
                 <div className="space-y-3">
                   {(optionsBySlot[slot] ?? []).map((opt, idx) => (
                     <MealOptionCard
@@ -417,7 +420,7 @@ function PlanWizard({
                     {moreLoading === slot ? "Đang tải…" : "Gợi ý thêm"}
                   </Button>
                   {selectedBySlot[slot] ? (
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setSheetSlot(slot)}>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => openRecipe(slot)}>
                       Chi tiết món
                     </Button>
                   ) : null}
@@ -427,7 +430,7 @@ function PlanWizard({
 
             <Button
               type="button"
-              className="bg-primary text-primary-foreground min-h-12 w-full font-semibold"
+              className="bg-primary text-primary-foreground min-h-12 w-full text-sm font-medium"
               disabled={!allSelected}
               onClick={goToSummary}
             >
@@ -441,7 +444,7 @@ function PlanWizard({
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Gợi ý nhẹ</CardTitle>
                   <CardDescription>
-                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm — hoặc giữ nguyên nếu ổn.
+                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm - hoặc giữ nguyên nếu ổn.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
@@ -464,17 +467,19 @@ function PlanWizard({
             ) : null}
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-base font-medium leading-snug">
                   {macroMode === "fullDayTargets" ? "Cả ngày" : "Tổng các bữa đã chọn"}
                 </CardTitle>
-                <CardDescription>~{Math.round(dayTotals.calories)} kcal</CardDescription>
+                <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
+                  ~{Math.round(dayTotals.calories)} kcal
+                </p>
               </CardHeader>
               <CardContent className="space-y-3">
                 <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode={macroMode} />
                 {highGlSlots.length > 0 ? (
                   <p className="text-muted-foreground text-xs leading-snug">
-                    {highGlSlots.map((s) => API_SLOT_VI[s]).join(", ")}: tải đường huyết cao — cân nhắc thay tinh bột
+                    {highGlSlots.map((s) => API_SLOT_VI[s]).join(", ")}: tải đường huyết cao - cân nhắc thay tinh bột
                     trắng bằng khoai lang hoặc yến mạch.
                   </p>
                 ) : null}
@@ -482,25 +487,27 @@ function PlanWizard({
             </Card>
 
             <div className="space-y-2">
-              <p className="text-foreground text-sm font-medium">Từng bữa</p>
+              <p className="text-foreground mt-2 mb-3 text-base font-medium">Từng bữa</p>
               {apiSlots.map((slot) => {
                 const m = selectedBySlot[slot];
                 if (!m) return null;
+                const iShort = insulinSpikeAbbrev(m.insulin_spike);
                 return (
                   <button
                     key={slot}
                     type="button"
                     onClick={() => openRecipe(slot)}
-                    className="border-border hover:bg-muted/50 w-full rounded-xl border p-3 text-left text-sm"
+                    className="border-border hover:bg-muted/50 mb-4 w-full rounded-lg border p-4 text-left last:mb-0"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-muted-foreground text-xs">{API_SLOT_VI[slot]}</p>
-                        <p className="text-foreground font-medium">{m.name}</p>
-                        <p className="text-muted-foreground text-xs">~{Math.round(m.calories)} kcal</p>
-                      </div>
-                      <InsulinSpikeBadge value={m.insulin_spike} />
-                    </div>
+                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                      {API_SLOT_VI[slot]}
+                    </p>
+                    <p className="text-foreground mt-1 text-base font-medium leading-snug">{m.name}</p>
+                    <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
+                      ~{Math.round(m.calories)} kcal · P {Math.round(m.macros.protein_g)}g · C{" "}
+                      {Math.round(m.macros.carb_g)}g · F {Math.round(m.macros.fat_g)}g · I{" "}
+                      <span className={cn("font-normal", insulinSpikeTextClass(m.insulin_spike))}>{iShort}</span>
+                    </p>
                   </button>
                 );
               })}
@@ -509,12 +516,12 @@ function PlanWizard({
             {funFact ? (
               <Card className="border-amber-500/30 bg-amber-500/5">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
                     <Lightbulb className="size-4 shrink-0 text-amber-600" />
                     Có thể bạn chưa biết
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="text-muted-foreground text-sm">{funFact}</CardContent>
+                <CardContent className="text-muted-foreground text-sm italic">{funFact}</CardContent>
               </Card>
             ) : null}
 
@@ -540,7 +547,7 @@ function PlanWizard({
                   <ul className="text-muted-foreground list-inside list-disc space-y-1">
                     {shopping.suggestions.map((s, i) => (
                       <li key={i}>
-                        <span className="text-foreground">{s.ingredient}</span> — {s.reason}
+                        <span className="text-foreground">{s.ingredient}</span> - {s.reason}
                       </li>
                     ))}
                   </ul>
@@ -562,7 +569,7 @@ function PlanWizard({
               </Button>
               <Button
                 type="button"
-                className="bg-primary text-primary-foreground min-h-12 flex-[2] font-semibold"
+                className="bg-primary text-primary-foreground min-h-12 flex-[2] text-sm font-medium"
                 disabled={actionLoading || !allSelected}
                 onClick={() => void confirmPlan()}
               >
@@ -599,11 +606,19 @@ function PlanWizard({
           recipe={recipeCache[recipeSlot]}
           loading={recipeLoading}
           onClose={() => setRecipeSlot(null)}
+          onOpenIngredientEdit={() => {
+            const s = recipeSlot;
+            setRecipeSlot(null);
+            if (s) setSheetSlot(s);
+          }}
         />
       ) : null}
     </div>
   );
 }
+
+const sectionLabelClass =
+  "text-muted-foreground text-xs font-medium tracking-wide uppercase";
 
 function RecipeOverlay({
   slot,
@@ -611,62 +626,102 @@ function RecipeOverlay({
   recipe,
   loading,
   onClose,
+  onOpenIngredientEdit,
 }: {
   slot: ApiMealTime;
   meal: MealOption;
   recipe?: RecipeDetailParsed;
   loading: boolean;
   onClose: () => void;
+  onOpenIngredientEdit: () => void;
 }) {
+  const iShort = insulinSpikeAbbrev(meal.insulin_spike);
+  const highGl = meal.glycemic_load === "high";
+
   return (
     <>
       <button type="button" className="fixed inset-0 z-40 bg-black/50" aria-label="Đóng" onClick={onClose} />
       <div className="border-border bg-background fixed inset-x-0 bottom-0 top-[12%] z-50 flex flex-col overflow-hidden rounded-t-2xl border shadow-xl">
         <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
-          <div>
-            <p className="text-muted-foreground text-xs">{API_SLOT_VI[slot]}</p>
-            <p className="text-foreground text-lg font-semibold">{meal.name}</p>
+          <div className="min-w-0 pr-2">
+            <p className="text-muted-foreground text-xs font-medium">{API_SLOT_VI[slot]}</p>
+            <p className="text-foreground mt-0.5 text-lg font-medium leading-snug">{meal.name}</p>
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground shrink-0 text-sm font-medium"
+            onClick={onClose}
+          >
             Đóng
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          {loading ? (
-            <p className="text-muted-foreground text-sm">Đang tạo công thức…</p>
-          ) : recipe ? (
-            <div className="space-y-4 text-sm">
-              <section>
-                <p className="text-foreground mb-2 font-medium">Nguyên liệu</p>
-                <ul className="text-muted-foreground list-inside list-disc space-y-1">
-                  {meal.ingredients.map((line, i) => (
-                    <li key={i}>{line}</li>
-                  ))}
-                </ul>
-              </section>
-              <section>
-                <p className="text-foreground mb-2 font-medium">Các bước</p>
-                <ol className="text-muted-foreground list-inside list-decimal space-y-2">
-                  {recipe.steps.map((s, i) => (
-                    <li key={i} className="leading-relaxed">
-                      {s}
-                    </li>
-                  ))}
-                </ol>
-              </section>
-              {recipe.tips ? (
-                <section>
-                  <p className="text-foreground mb-1 font-medium">Mẹo</p>
-                  <p className="text-muted-foreground">{recipe.tips}</p>
-                </section>
-              ) : null}
-              <p className="text-muted-foreground text-xs">
-                ~{meal.prep_time_minutes} phút · {meal.cooking_method}
+          <div className="text-sm">
+            <section className="border-border/30 mt-4 border-t pt-5 first:mt-0 first:border-t-0 first:pt-0">
+              <p className={cn(sectionLabelClass, "mb-2")}>Dinh dưỡng (ước lượng)</p>
+              <p className="text-foreground font-normal tabular-nums">
+                ~{Math.round(meal.calories)} kcal · P {Math.round(meal.macros.protein_g)}g · C{" "}
+                {Math.round(meal.macros.carb_g)}g · F {Math.round(meal.macros.fat_g)}g · I{" "}
+                <span className={cn("font-normal", insulinSpikeTextClass(meal.insulin_spike))}>{iShort}</span>
               </p>
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">Không có dữ liệu.</p>
-          )}
+            </section>
+            {highGl ? (
+              <p className="text-amber-600 dark:text-amber-500 mt-3 text-xs font-normal leading-snug">
+                Món này có tải đường huyết cao - cân nhắc giảm tinh bột trắng hoặc thêm rau.
+              </p>
+            ) : null}
+            <section className="border-border/30 mt-5 border-t pt-5">
+              <p className={cn(sectionLabelClass, "mb-2")}>Nguyên liệu</p>
+              <ul className="text-foreground list-inside list-disc space-y-1.5">
+                {meal.ingredients.map((line, i) => (
+                  <li key={i} className="text-sm font-normal leading-normal">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </section>
+            {loading ? (
+              <p className="text-muted-foreground mt-5 text-sm font-normal">Đang tạo công thức…</p>
+            ) : recipe ? (
+              <>
+                <section className="border-border/30 mt-5 border-t pt-5">
+                  <p className={cn(sectionLabelClass, "mb-2")}>Các bước</p>
+                  <ol className="text-foreground list-inside list-decimal space-y-3 marker:font-medium">
+                    {recipe.steps.map((s, i) => (
+                      <li key={i} className="text-sm font-normal leading-relaxed">
+                        {stripLeadingStepNumber(s)}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+                {recipe.tips ? (
+                  <section className="border-border/30 mt-5 border-t pt-5">
+                    <p className={cn(sectionLabelClass, "mb-2")}>Mẹo</p>
+                    <p className="text-muted-foreground line-clamp-3 text-sm font-normal leading-normal">
+                      {recipe.tips}
+                    </p>
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-muted-foreground mt-5 text-sm font-normal">Chưa có các bước nấu.</p>
+            )}
+            <p className="text-muted-foreground mt-5 text-xs font-normal">
+              ~{meal.prep_time_minutes} phút · {meal.cooking_method}
+            </p>
+          </div>
+        </div>
+        <div className="border-border bg-background shrink-0 border-t px-4 py-3">
+          <Button
+            type="button"
+            variant="link"
+            className="text-primary h-auto w-full py-2 text-sm font-medium"
+            onClick={() => onOpenIngredientEdit()}
+          >
+            Chỉnh nguyên liệu / đổi món
+          </Button>
         </div>
       </div>
     </>

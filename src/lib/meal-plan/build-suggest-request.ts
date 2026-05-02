@@ -41,6 +41,8 @@ export type BuildSuggestInput = {
   /** When set (e.g. Random flow), overrides selectedIngredientLabels for the API payload */
   ingredientLabelsOverride?: string[];
   tasteContext?: TasteContext;
+  /** Optional note shown on Home ("Ghi chú cho AI"). */
+  userNote?: string;
 };
 
 export function buildHealthProfilePayload(profile: HealthProfileDoc): SuggestMealsRequest["health_profile"] {
@@ -67,6 +69,7 @@ export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMeals
     selectedIngredientLabels,
     ingredientLabelsOverride,
     tasteContext,
+    userNote,
   } = input;
 
   const meals: { time: ApiMealTime; effort: MealEffort }[] = [];
@@ -85,9 +88,11 @@ export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMeals
       ? ingredientLabelsOverride
       : selectedIngredientLabels;
 
+  const note = typeof userNote === "string" ? userNote.trim() : "";
+
   return {
     ingredients:
-      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn — gợi ý món linh hoạt)"],
+      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn - gợi ý món linh hoạt)"],
     meals,
     servings: Math.max(1, Math.min(99, servings)),
     health_profile: buildHealthProfilePayload(profile),
@@ -95,6 +100,7 @@ export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMeals
     (tasteContext.liked_meal_names.length > 0 || tasteContext.disliked_meal_names.length > 0)
       ? { taste_context: tasteContext }
       : {}),
+    ...(note ? { user_note: note } : {}),
   };
 }
 

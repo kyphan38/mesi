@@ -82,7 +82,7 @@ export function AddIngredientSheet({
         }}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
-          <h2 id="add-ingredient-title" className="text-foreground pr-6 text-sm font-medium">
+          <h2 id="add-ingredient-title" className="text-foreground pr-6 text-base font-medium">
             Thêm vào: {categoryLabel}
           </h2>
           <button
@@ -100,7 +100,7 @@ export function AddIngredientSheet({
           value={value}
           placeholder="Tên nguyên liệu…"
           autoComplete="off"
-          className="border-input bg-background text-foreground mb-2 min-h-11 w-full rounded-lg border px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="border-input bg-background text-foreground mb-2 min-h-11 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onChange={(e) => {
             setValue(e.target.value);
             setDupError(false);

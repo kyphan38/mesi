@@ -154,6 +154,7 @@ export function HomeScreen() {
   const [prepDayCount, setPrepDayCount] = useState(3);
 
   const [apiError, setApiError] = useState<string | null>(null);
+  const [aiNote, setAiNote] = useState("");
   const [pantryReady, setPantryReady] = useState(false);
   const [homeHeadReady, setHomeHeadReady] = useState(false);
   const [todayPlanDoc, setTodayPlanDoc] = useState<MealDocWithId | null>(null);
@@ -409,6 +410,7 @@ export function HomeScreen() {
         effort,
         selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, flatCustomList),
         tasteContext,
+        userNote: aiNote,
       });
 
       const res = await apiFetch("/api/ai/suggest-meals", {
@@ -469,6 +471,7 @@ export function HomeScreen() {
         selectedIngredientLabels: [],
         ingredientLabelsOverride: ingredientLabels,
         tasteContext,
+        userNote: aiNote,
       });
 
       const res = await apiFetch("/api/ai/suggest-meals", {
@@ -517,6 +520,7 @@ export function HomeScreen() {
         selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, flatCustomList),
         prepDayCount,
         tasteContext,
+        userNote: aiNote,
       });
 
       const res = await apiFetch("/api/ai/suggest-meal-prep", {
@@ -640,7 +644,7 @@ export function HomeScreen() {
     return (
       <div className="bg-background flex min-h-0 flex-1 flex-col">
         <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
-          <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
+          <span className="text-foreground text-xl font-medium leading-tight">Mesi</span>
           <div className="w-20" />
         </header>
         <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">Đang tải…</div>
@@ -652,7 +656,7 @@ export function HomeScreen() {
     return (
       <div className="bg-background flex min-h-0 flex-1 flex-col">
         <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
-          <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
+          <span className="text-foreground text-xl font-medium leading-tight">Mesi</span>
           <div className="flex items-center gap-1">
             <Link
               href="/history"
@@ -691,7 +695,7 @@ export function HomeScreen() {
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col">
       <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
-        <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
+        <span className="text-foreground text-xl font-medium leading-tight">Mesi</span>
         <div className="flex items-center gap-1">
           <Link
             href="/history"
@@ -730,7 +734,7 @@ export function HomeScreen() {
           {apiError ? (
             <Alert variant="destructive" className="relative pr-10">
               <AlertTitle>Không tạo được gợi ý</AlertTitle>
-              <AlertDescription className="text-destructive/90">{apiError}</AlertDescription>
+              <AlertDescription className="text-destructive">{apiError}</AlertDescription>
               <button
                 type="button"
                 className="text-destructive ring-offset-background focus:ring-ring absolute top-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
@@ -751,8 +755,8 @@ export function HomeScreen() {
           <section className="space-y-3">
             <label className="border-border flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
               <div>
-                <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
-                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
+                <p className="text-foreground text-base font-medium">Meal prep (nhiều ngày)</p>
+                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa - sau khi xong bạn lưu cả lịch.</p>
               </div>
               <input
                 type="checkbox"
@@ -769,7 +773,7 @@ export function HomeScreen() {
                   type="number"
                   min={2}
                   max={7}
-                  className="min-h-11 max-w-[8rem] text-base"
+                  className="min-h-11 max-w-[8rem]"
                   value={prepDayCount}
                   onChange={(e) => {
                     const n = Number.parseInt(e.target.value, 10);
@@ -786,7 +790,7 @@ export function HomeScreen() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-foreground text-sm font-medium">Số người ăn</h2>
+            <h2 className="text-foreground mb-2 text-base font-medium">Số người ăn</h2>
             <div className="flex flex-wrap gap-2">
               {(["1", "2", "3"] as const).map((n) => (
                 <button
@@ -821,7 +825,7 @@ export function HomeScreen() {
                 type="number"
                 min={1}
                 max={99}
-                className="min-h-11 max-w-[8rem] text-base"
+                className="min-h-11 max-w-[8rem]"
                 value={dinerOther}
                 onChange={(e) => setDinerOther(e.target.value)}
                 aria-label="Số người (nhập tay)"
@@ -833,7 +837,7 @@ export function HomeScreen() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-foreground text-sm font-medium">Lên plan cho buổi nào?</h2>
+            <h2 className="text-foreground mb-2 text-base font-medium">Lên plan cho buổi nào?</h2>
             {SLOTS.map((slot) => (
               <div key={slot} className="border-border rounded-xl border p-3">
                 <label className="flex cursor-pointer items-center gap-3">
@@ -843,11 +847,11 @@ export function HomeScreen() {
                     onChange={() => toggleMeal(slot)}
                     className="border-input size-5 rounded"
                   />
-                  <span className="text-foreground font-medium">{MEAL_LABELS[slot]}</span>
+                  <span className="text-foreground text-sm font-medium">{MEAL_LABELS[slot]}</span>
                 </label>
                 {mealOn[slot] ? (
                   <div className="mt-2 flex min-h-11 items-center gap-2">
-                    <span className="shrink-0 text-base select-none" aria-hidden>
+                    <span className="shrink-0 text-sm select-none" aria-hidden>
                       {SLOT_EMOJI[slot]}
                     </span>
                     <select
@@ -869,7 +873,7 @@ export function HomeScreen() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-foreground text-sm font-medium">Nhà đang có gì?</h2>
+            <h2 className="text-foreground mb-2 text-base font-medium">Nhà đang có gì?</h2>
 
             {visibleCategories.map((cat) => {
               const rows = orderCategoryRows(cat.presets, customItems[cat.id], topIds);
@@ -903,6 +907,22 @@ export function HomeScreen() {
               </button>
             ) : null}
           </section>
+
+          <section className="space-y-2">
+            <label htmlFor="mesi-ai-note" className="text-muted-foreground text-sm">
+              Ghi chú cho AI
+            </label>
+            <p className="text-muted-foreground text-xs">Hôm nay có gì đặc biệt? (không bắt buộc)</p>
+            <textarea
+              id="mesi-ai-note"
+              value={aiNote}
+              onChange={(e) => setAiNote(e.target.value)}
+              placeholder="VD: Trưa mang đi công ty, thích ăn 3 trứng bữa sáng, ăn trái cây sau trưa…"
+              maxLength={600}
+              rows={3}
+              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring max-h-[4.75rem] min-h-[2.75rem] w-full resize-y overflow-y-auto rounded-lg border px-3 py-2 text-sm leading-normal shadow-xs outline-none focus-visible:ring-2"
+            />
+          </section>
         </div>
       </div>
 
@@ -927,7 +947,7 @@ export function HomeScreen() {
         <div className="flex flex-col gap-0">
           <Button
             type="button"
-            className="bg-primary text-primary-foreground min-h-12 w-full text-base font-semibold"
+            className="bg-primary text-primary-foreground min-h-12 w-full text-sm font-medium"
             disabled={ctaBusy}
             onClick={() => void (mealPrepMode ? runMealPrepFlow() : runSuggestFlow())}
           >

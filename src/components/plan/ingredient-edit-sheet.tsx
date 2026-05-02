@@ -44,7 +44,7 @@ export function IngredientEditSheet({
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <div>
             <p className="text-muted-foreground text-xs">{slotLabel}</p>
-            <p className="text-foreground font-medium">{meal.name}</p>
+            <p className="text-foreground text-base font-medium leading-snug">{meal.name}</p>
           </div>
           <button
             type="button"
@@ -57,7 +57,7 @@ export function IngredientEditSheet({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           <p className="text-muted-foreground mb-2 text-xs">
-            Nguyên liệu — chạm X để bỏ (AI tính lại món, không chỉnh gram tay)
+            Nguyên liệu - chạm X để bỏ (AI tính lại món, không chỉnh gram tay)
           </p>
           <ul className="space-y-2">
             {meal.ingredients.map((line, i) => (
@@ -73,7 +73,7 @@ export function IngredientEditSheet({
                   title={
                     canRemoveLine
                       ? "Bỏ nguyên liệu này"
-                      : "Giữ ít nhất một dòng — dùng Đổi món nếu cần thay đổi lớn"
+                      : "Giữ ít nhất một dòng - dùng Đổi món nếu cần thay đổi lớn"
                   }
                   aria-label={`Bỏ: ${line.slice(0, 80)}`}
                   onClick={() => void onRemoveIngredient(line)}
@@ -85,7 +85,7 @@ export function IngredientEditSheet({
           </ul>
         </div>
         <div className="border-border border-t p-4">
-          <Button type="button" className="min-h-12 w-full font-semibold" disabled={loading} onClick={() => void onSwap()}>
+          <Button type="button" className="min-h-12 w-full text-sm font-medium" disabled={loading} onClick={() => void onSwap()}>
             {loading ? "Đang đổi…" : "Đổi món khác"}
           </Button>
         </div>

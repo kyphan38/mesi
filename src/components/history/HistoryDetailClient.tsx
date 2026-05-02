@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import { getHealthProfile } from "@/lib/db/firestore";
@@ -15,8 +15,10 @@ import { buildCookAgainPayloadFromDoc, writeCookAgainPayload } from "@/lib/plan/
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
 import { sumDayTotals } from "@/lib/plan/day-insulin";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
+import { insulinSpikeAbbrev, insulinSpikeTextClass } from "@/lib/plan/day-insulin";
+import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
+import { cn } from "@/lib/utils";
 import type { HealthProfileDoc } from "@/types/health-profile";
 
 export function HistoryDetailClient({ docId }: { docId: string }) {
@@ -74,7 +76,7 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
     const payload = buildCookAgainPayloadFromDoc(row.id, row.data);
     writeCookAgainPayload(payload);
     router.push("/?cookAgain=1");
-    show("Đã chuyển về trang chủ — kiểm tra nguyên liệu rồi bấm Lên thực đơn.", "info");
+    show("Đã chuyển về trang chủ - kiểm tra nguyên liệu rồi bấm Lên thực đơn.", "info");
   };
 
   const removeFromHistory = async () => {
@@ -111,6 +113,8 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
   }
 
   const d = row.data;
+  const summaryTitle =
+    macroMode === "fullDayTargets" ? "Cả ngày" : "Tổng các bữa đã chọn";
 
   return (
     <div className="bg-background min-h-0 flex-1 pb-24">
@@ -123,84 +127,93 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
           <ArrowLeft className="size-5 shrink-0" aria-hidden />
           Lịch sử
         </Link>
-        <span className="text-foreground font-semibold">Chi tiết</span>
+        <span className="text-foreground text-base font-medium">Chi tiết</span>
       </header>
 
       <div className="mx-auto w-full max-w-[430px] space-y-4 px-4 py-4">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={() => cookAgain()}>
+          <Button type="button" variant="secondary" className="text-sm font-medium" onClick={() => cookAgain()}>
             Nấu lại
           </Button>
           {d.prep_batch_id ? (
             <Link
               href={`/history/prep/${d.prep_batch_id}`}
-              className={buttonVariants({ variant: "outline" })}
+              className={buttonVariants({ variant: "outline", className: "text-sm font-medium" })}
             >
               Xem cả batch prep
             </Link>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => void removeFromHistory()}>
+          <Button
+            type="button"
+            variant="outline"
+            className="text-sm font-medium"
+            onClick={() => void removeFromHistory()}
+          >
             Xóa khỏi lịch sử
           </Button>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{formatDateKeyVi(d.dateKey)}</CardTitle>
-            <CardDescription>
-              {macroMode === "fullDayTargets"
-                ? `~${Math.round(dayTotals.calories)} kcal`
-                : `Tổng các bữa đã chọn · ~${Math.round(dayTotals.calories)} kcal`}
-            </CardDescription>
+          <CardHeader className="space-y-1">
+            <p className="text-muted-foreground text-sm font-normal">{formatDateKeyVi(d.dateKey)}</p>
+            <p className="text-foreground text-base font-medium">{summaryTitle}</p>
+            <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
+              ~{Math.round(dayTotals.calories)} kcal
+            </p>
           </CardHeader>
           <CardContent>
             <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode={macroMode} />
           </CardContent>
         </Card>
 
-        <div className="space-y-2">
-          <p className="text-foreground text-sm font-medium">Từng bữa</p>
-          {apiSlots.map((slot) => {
-            const entry = d.slots[slot];
-            if (!entry?.meal) return null;
-            return (
-              <Card key={slot}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">{API_SLOT_VI[slot]}</CardTitle>
+        <div>
+          <p className="text-foreground mt-2 mb-3 text-base font-medium">Từng bữa</p>
+          <div className="space-y-4">
+            {apiSlots.map((slot) => {
+              const entry = d.slots[slot];
+              if (!entry?.meal) return null;
+              return (
+                <div
+                  key={slot}
+                  className="border-border mb-4 rounded-lg border p-4 last:mb-0"
+                >
+                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    {API_SLOT_VI[slot]}
+                  </p>
                   {entry.is_reheated ? (
-                    <CardDescription>Hâm lại / từ tủ lạnh</CardDescription>
+                    <p className="text-muted-foreground mt-1 text-xs font-normal">Hâm lại / từ tủ lạnh</p>
                   ) : null}
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <p className="text-foreground font-medium">{entry.meal.name}</p>
-                  <p className="text-muted-foreground text-xs">{entry.meal.description}</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground">~{Math.round(entry.meal.calories)} kcal</span>
-                    <InsulinSpikeBadge value={entry.meal.insulin_spike} />
-                  </div>
+                  <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
+                  <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
+                    ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
+                    {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g · I{" "}
+                    <span className={cn("font-normal", insulinSpikeTextClass(entry.meal.insulin_spike))}>
+                      {insulinSpikeAbbrev(entry.meal.insulin_spike)}
+                    </span>
+                  </p>
                   {entry.recipe?.steps?.length ? (
-                    <div>
-                      <p className="text-foreground mb-1 font-medium">Các bước</p>
-                      <ol className="text-muted-foreground list-inside list-decimal space-y-1">
+                    <div className="mt-5">
+                      <p className="text-muted-foreground mb-3 text-sm font-medium">Các bước</p>
+                      <ol className="list-inside list-decimal space-y-3 marker:font-medium">
                         {entry.recipe.steps.map((s, i) => (
-                          <li key={i}>{s}</li>
+                          <li key={i} className="text-foreground text-sm font-normal leading-relaxed">
+                            {stripLeadingStepNumber(s)}
+                          </li>
                         ))}
                       </ol>
                     </div>
                   ) : null}
-                </CardContent>
-              </Card>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {d.shoppingNote ? (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Ghi chú mua sắm</CardTitle>
-            </CardHeader>
-            <CardContent className="text-muted-foreground text-sm">{d.shoppingNote}</CardContent>
-          </Card>
+          <div className="border-border mt-6 rounded-lg border bg-muted/30 p-3">
+            <p className="text-foreground mb-1 text-sm font-medium">Ghi chú mua sắm</p>
+            <p className="text-muted-foreground text-sm font-normal whitespace-pre-wrap">{d.shoppingNote}</p>
+          </div>
         ) : null}
 
         {d.prep_instructions ? (
@@ -208,9 +221,7 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Hướng dẫn prep</CardTitle>
             </CardHeader>
-            <CardContent className="text-muted-foreground text-sm whitespace-pre-wrap">
-              {d.prep_instructions}
-            </CardContent>
+            <CardContent className="text-muted-foreground text-sm whitespace-pre-wrap">{d.prep_instructions}</CardContent>
           </Card>
         ) : null}
       </div>

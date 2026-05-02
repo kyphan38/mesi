@@ -32,6 +32,7 @@ const bodySchema = z.object({
       disliked_meal_names: z.array(z.string()),
     })
     .optional(),
+  user_note: z.string().max(600).optional(),
 });
 
 export async function POST(req: Request) {

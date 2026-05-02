@@ -127,17 +127,23 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans overflow-x-hidden;
+    @apply bg-background text-foreground text-sm font-sans overflow-x-hidden;
   }
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-source-serif), ui-serif, Georgia, serif;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
+  /* App UI uses sans (Geist); Source Serif stays available via --font-heading / font-heading if needed */
   a:focus-visible {
     @apply rounded-sm outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+@layer components {
+  .mesi-page-title {
+    @apply font-sans text-xl font-medium leading-tight text-foreground;
+  }
+  .mesi-section-heading {
+    @apply font-sans text-base font-medium text-foreground;
+  }
+  .mesi-card-title {
+    @apply font-sans text-base font-medium leading-snug text-foreground;
   }
 }
 

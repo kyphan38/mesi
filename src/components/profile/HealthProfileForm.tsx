@@ -251,9 +251,9 @@ export function HealthProfileForm({
       >
       {showIntro ? (
         <div className="space-y-1">
-          <h1 className="text-foreground text-2xl font-semibold tracking-tight">Hồ sơ sức khỏe</h1>
+          <h1 className="text-foreground text-xl font-medium leading-tight">Hồ sơ sức khỏe</h1>
           <p className="text-muted-foreground text-sm">
-            Điền một lần — chỉnh lại bất cứ lúc trong tab Hồ sơ.
+            Điền một lần - chỉnh lại bất cứ lúc trong tab Hồ sơ.
           </p>
         </div>
       ) : null}
@@ -333,7 +333,7 @@ export function HealthProfileForm({
                 {l}
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-lg leading-none"
+                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-base leading-none"
                   onClick={() => removeCustomAvoid(l)}
                   aria-label={`Xóa ${l}`}
                 >
@@ -387,7 +387,7 @@ export function HealthProfileForm({
                 {l}
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-lg leading-none"
+                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-base leading-none"
                   onClick={() => removeCustomNutrition(l)}
                   aria-label={`Xóa ${l}`}
                 >
@@ -402,7 +402,7 @@ export function HealthProfileForm({
       <section className="space-y-3">
         <h2 className="text-foreground text-base font-medium">Supplement đang dùng</h2>
         <p className="text-muted-foreground text-xs">
-          Chọn bổ sung — thời điểm uống sẽ được gợi ý trên màn hình thực đơn.
+          Chọn bổ sung - thời điểm uống sẽ được gợi ý trên màn hình thực đơn.
         </p>
         <div className="flex flex-wrap gap-2">
           {SUPPLEMENT_PRESETS.map((p) => (
@@ -444,7 +444,7 @@ export function HealthProfileForm({
                 {c.label}
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-lg leading-none"
+                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-base leading-none"
                   onClick={() => removeCustomSupp(c.id)}
                   aria-label={`Xóa ${c.label}`}
                 >

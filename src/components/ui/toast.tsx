@@ -41,20 +41,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {toast ? (
         <div
           className={cn(
-            "toast-mesi pointer-events-auto fixed bottom-6 right-6 z-[200] flex max-w-[min(360px,calc(100vw-2rem))] items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg sm:right-6",
+            "toast-mesi pointer-events-auto fixed bottom-6 right-6 z-[200] flex max-w-[min(360px,calc(100vw-2rem))] items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium shadow-lg sm:right-6",
             toast.type === "success" && "toast-mesi-success",
             toast.type === "error" && "toast-mesi-error",
             toast.type === "info" && "toast-mesi-info",
           )}
           role="status"
         >
-          <span aria-hidden className="shrink-0 text-base leading-none opacity-90">
+          <span aria-hidden className="shrink-0 text-base leading-none">
             {toast.type === "success" ? "✓" : toast.type === "error" ? "✕" : "ℹ"}
           </span>
           <span className="min-w-0 flex-1">{toast.message}</span>
           <button
             type="button"
-            className="shrink-0 rounded-md p-1 opacity-80 hover:opacity-100"
+            className="shrink-0 rounded-md p-1 text-inherit/80 hover:text-inherit"
             onClick={dismiss}
             aria-label="Dismiss notification"
           >
