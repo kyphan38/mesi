@@ -17,6 +17,7 @@ import {
 } from "@/lib/constants/health-presets";
 import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
 import { insulinSpikeAbbrev, insulinSpikeTextClass, sumDayTotals } from "@/lib/plan/day-insulin";
+import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
 import { clearPlanDraft, readPlanDraft, type PlanDraftV1 } from "@/lib/plan/plan-draft";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
@@ -355,6 +356,7 @@ function PlanWizard({
       await saveConfirmedPlan(payload);
       await incrementIngredientsFromMeals(selectedMeals);
       clearPlanDraft();
+      setHomeComposeNewPlanActive(false);
       showToast("Đã lưu thực đơn hôm nay.", "success");
       onDone();
     } catch (e) {

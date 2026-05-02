@@ -39,6 +39,7 @@ import {
 } from "@/lib/meal-plan/build-suggest-request";
 import type { CookAgainPayloadV1 } from "@/lib/plan/cook-again";
 import { readCookAgainPayload } from "@/lib/plan/cook-again";
+import { getHomeComposeNewPlanActive, setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
 import { writeMealPrepDraft, writePlanDraft } from "@/lib/plan/plan-draft";
 import {
   getLatestUnratedConfirmedDoc,
@@ -166,7 +167,10 @@ export function HomeScreen() {
       const [p, t] = await Promise.all([getHealthProfile(), getTodayConfirmedPlan()]);
       setHomeProfile(p ?? getDefaultHealthProfile());
       setTodayPlanDoc(t);
+      const composing = getHomeComposeNewPlanActive();
       if (t != null) {
+        startTransition(() => setFormOverride(composing));
+      } else {
         startTransition(() => setFormOverride(false));
       }
     } catch (e) {
@@ -217,6 +221,7 @@ export function HomeScreen() {
   }, []);
 
   const applyCookAgainPayload = useCallback((payload: CookAgainPayloadV1) => {
+    setHomeComposeNewPlanActive(false);
     setFormOverride(true);
     const n = payload.servings;
     if (n >= 1 && n <= 3) {
@@ -685,7 +690,6 @@ export function HomeScreen() {
           healthProfile={homeProfile}
           onReplacedPlan={() => {
             setFormOverride(true);
-            setTodayPlanDoc(null);
           }}
         />
       </div>

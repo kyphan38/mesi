@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
-import { deleteConfirmedPlansForDateKey } from "@/lib/db/meals";
-import { localDateKey } from "@/lib/db/plan-intents";
+import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import type { MealDocWithId } from "@/lib/db/meals";
@@ -34,7 +33,6 @@ export function TodayPlanView({
   healthProfile: HealthProfileDoc;
   onReplacedPlan: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
   const d = plan.data;
 
   const apiSlots = useMemo(
@@ -50,14 +48,9 @@ export function TodayPlanView({
   const funFact = useMemo(() => randomFunFactFromPlan(d), [d]);
   const macroMode = apiSlots.length >= 3 ? "fullDayTargets" : "totalsOnly";
 
-  const startNewPlan = async () => {
-    setBusy(true);
-    try {
-      await deleteConfirmedPlansForDateKey(localDateKey());
-      onReplacedPlan();
-    } finally {
-      setBusy(false);
-    }
+  const startNewPlan = () => {
+    setHomeComposeNewPlanActive(true);
+    onReplacedPlan();
   };
 
   return (
@@ -141,10 +134,9 @@ export function TodayPlanView({
           variant="outline"
           size="sm"
           className="text-muted-foreground w-full"
-          disabled={busy}
-          onClick={() => void startNewPlan()}
+          onClick={startNewPlan}
         >
-          {busy ? "Đang chuẩn bị…" : "Lên plan mới"}
+          Lên plan mới
         </Button>
       </div>
     </>

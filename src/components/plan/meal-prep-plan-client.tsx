@@ -15,6 +15,7 @@ import {
   incrementIngredientsFromMeals,
   saveConfirmedPlan,
 } from "@/lib/db/meals";
+import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
 import { clearMealPrepDraft, readMealPrepDraft, type MealPrepPlanDraftV1 } from "@/lib/plan/plan-draft";
 import { insulinSpikeAbbrev, insulinSpikeTextClass, sumDayTotals } from "@/lib/plan/day-insulin";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
@@ -147,6 +148,7 @@ function MealPrepSummary({
 
       await incrementIngredientsFromMeals(allMeals);
       clearMealPrepDraft();
+      setHomeComposeNewPlanActive(false);
       await refreshTaste();
       showToast("Đã lưu kế hoạch meal prep.", "success");
       onDone();
