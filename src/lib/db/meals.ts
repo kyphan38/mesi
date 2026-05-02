@@ -59,6 +59,25 @@ function hasFinalRating(rating: unknown): boolean {
   return typeof rating === "string" && FINAL_RATINGS.includes(rating as MealRating);
 }
 
+/** Firestore `setDoc` rejects `undefined` field values; strip keys recursively. */
+function stripUndefinedForFirestore(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    return value.map((x) => stripUndefinedForFirestore(x));
+  }
+  const obj = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(obj)) {
+    const v = obj[key];
+    if (v === undefined) continue;
+    const cleaned = stripUndefinedForFirestore(v);
+    if (cleaned !== undefined) out[key] = cleaned;
+  }
+  return out;
+}
+
 const API_SLOT_ORDER: ApiMealTime[] = ["morning", "lunch", "dinner"];
 
 export function calculateDayTotalsFromSlots(
@@ -142,7 +161,7 @@ export async function saveConfirmedPlan(incoming: ConfirmedPlanDoc): Promise<str
         next.prep_instructions = existing.prep_instructions;
       }
     }
-    await setDoc(ref, next as DocumentData);
+    await setDoc(ref, stripUndefinedForFirestore(next) as DocumentData);
     return dateKey;
   }
 
@@ -162,7 +181,7 @@ export async function saveConfirmedPlan(incoming: ConfirmedPlanDoc): Promise<str
     ...(incoming.prep_batch_id ? { prep_batch_id: incoming.prep_batch_id } : {}),
     ...(incoming.prep_instructions ? { prep_instructions: incoming.prep_instructions } : {}),
   };
-  await setDoc(ref, newDoc as DocumentData);
+  await setDoc(ref, stripUndefinedForFirestore(newDoc) as DocumentData);
   return dateKey;
 }
 

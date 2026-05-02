@@ -73,7 +73,10 @@ export async function listIngredientStats(): Promise<IngredientStat[]> {
   return rows;
 }
 
-/** Build custom chip lists from Firestore rows (legacy docs without isCustom → other if not a preset id). */
+/**
+ * Custom chips from Firestore: only rows the user explicitly added via pantry UI
+ * (`isCustom: true` + `category`). Meal-derived ingredient stats (e.g. `c_*` ids) are excluded.
+ */
 export function hydrateCustomItemsFromStats(rows: IngredientStat[]): Record<PantryCategory, PantryPreset[]> {
   const out: Record<PantryCategory, PantryPreset[]> = {
     protein: [],
@@ -94,12 +97,6 @@ export function hydrateCustomItemsFromStats(rows: IngredientStat[]): Record<Pant
 
     if (r.isCustom === true && r.category && out[r.category]) {
       out[r.category].push({ id: r.id, label: r.label });
-      seen.add(r.id);
-      continue;
-    }
-
-    if (!preset) {
-      out.other.push({ id: r.id, label: r.label });
       seen.add(r.id);
     }
   }

@@ -126,7 +126,7 @@ export function TodayPlanView({
                 className="border-border rounded-lg border border-dashed p-4 text-center"
               >
                 <p className="text-muted-foreground text-sm">
-                  {API_SLOT_VI[slot]} — chưa có plan
+                  {API_SLOT_VI[slot]} - chưa có plan
                 </p>
                 <button
                   type="button"

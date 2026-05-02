@@ -627,7 +627,7 @@ export function HomeScreen() {
       <div
         key={item.id}
         className={cn(
-          "inline-flex max-w-full min-h-10 items-stretch overflow-hidden rounded-full border text-sm transition-colors",
+          "inline-flex max-w-full min-h-10 min-w-0 items-stretch overflow-hidden rounded-full border text-sm transition-colors",
           on
             ? "border-primary bg-primary text-primary-foreground"
             : "border-muted-foreground/30 bg-card text-foreground",
@@ -637,18 +637,18 @@ export function HomeScreen() {
           type="button"
           onClick={toggle}
           className={cn(
-            "max-w-[min(100%,12rem)] min-h-10 px-3 py-1.5 text-left",
+            "min-h-10 min-w-0 max-w-[min(100%,18rem)] flex-1 px-3 py-1.5 text-left",
             on ? "" : "hover:bg-muted",
           )}
         >
-          <span className="truncate">{item.label}</span>
+          <span className="block truncate">{item.label}</span>
         </button>
         {customRow ? (
           <button
             type="button"
             onClick={() => void removeCustomItem(categoryId, item)}
             className={cn(
-              "border-border shrink-0 border-l px-2 transition-colors",
+              "border-border flex shrink-0 items-center justify-center border-l px-2 transition-colors",
               on
                 ? "hover:bg-primary/90 text-primary-foreground"
                 : "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
@@ -949,15 +949,12 @@ export function HomeScreen() {
                   ) : null}
                 </div>
                 {mealOn[slot] ? (
-                  <div className="mt-2 flex min-h-11 items-center gap-2">
-                    <span className="shrink-0 text-sm select-none" aria-hidden>
-                      {SLOT_EMOJI[slot]}
-                    </span>
+                  <div className="mt-2 w-full min-w-0">
                     <select
                       value={effort[slot]}
                       onChange={(e) => setEffortFor(slot, e.target.value as Effort)}
-                      aria-label={`Mức nấu ${MEAL_LABELS[slot]}`}
-                      className="border-input bg-background text-foreground focus-visible:ring-ring flex h-11 min-h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+                      aria-label={`Mức nấu ${SLOT_EMOJI[slot]} ${MEAL_LABELS[slot]}`}
+                      className="border-input bg-background text-foreground focus-visible:ring-ring h-11 min-h-11 w-full min-w-0 rounded-lg border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
                     >
                       {EFFORT_OPTIONS.map((o) => (
                         <option key={o.id} value={o.id}>
