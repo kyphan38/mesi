@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAllowedCollection(collectionName) {
+      return collectionName in ["profile", "meals", "ingredients"];
+    }
+
+    match /users/{uid}/{collectionName}/{docId} {
+      allow read, write: if isOwner(uid) && isAllowedCollection(collectionName);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
