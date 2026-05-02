@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { History, Shuffle, User } from "lucide-react";
+import { History, Plus, Shuffle, User, X } from "lucide-react";
+import { AddIngredientSheet } from "@/components/home/AddIngredientSheet";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +13,15 @@ import { useToast } from "@/components/ui/toast";
 import { useMesiTaste } from "@/components/providers/MesiTasteProvider";
 import { cn } from "@/lib/utils";
 import {
-  CARB_PRESETS,
   getPantryPreset,
-  PROTEIN_PRESETS,
+  getPresetCategoryById,
+  PANTRY_CATEGORIES,
+  type PantryCategory,
   type PantryPreset,
-  VEG_PRESETS,
 } from "@/lib/constants/pantry-presets";
 import {
+  deleteUserIngredient,
+  hydrateCustomItemsFromStats,
   incrementIngredientUse,
   listIngredientStats,
   topIngredientIds,
@@ -33,7 +36,6 @@ import {
   buildSuggestMealsRequest,
   labelsFromPantrySelection,
 } from "@/lib/meal-plan/build-suggest-request";
-import { ingredientLineDocId } from "@/lib/meal-plan/ingredient-id";
 import type { CookAgainPayloadV1 } from "@/lib/plan/cook-again";
 import { readCookAgainPayload } from "@/lib/plan/cook-again";
 import { writeMealPrepDraft, writePlanDraft } from "@/lib/plan/plan-draft";
@@ -81,20 +83,34 @@ const ALL_QUICK_EFFORT: Record<MealSlot, Effort> = {
   evening: "quick",
 };
 
-function orderPresetsByTopIds(presets: PantryPreset[], topIds: string[]): PantryPreset[] {
-  const inGroup = new Set(presets.map((p) => p.id));
+function emptyCustomItems(): Record<PantryCategory, PantryPreset[]> {
+  return { protein: [], vegetable: [], carb: [], fruit: [], other: [] };
+}
+
+function orderCategoryRows(
+  basePresets: PantryPreset[],
+  customInCategory: PantryPreset[],
+  topIds: string[],
+): PantryPreset[] {
+  const combined = [...basePresets, ...customInCategory];
+  const inIds = new Set(combined.map((p) => p.id));
   const head: PantryPreset[] = [];
   for (const id of topIds) {
-    if (!inGroup.has(id)) continue;
-    const p = presets.find((x) => x.id === id);
+    if (!inIds.has(id)) continue;
+    const p = combined.find((x) => x.id === id);
     if (p) head.push(p);
   }
   const headIds = new Set(head.map((p) => p.id));
-  const tail = presets.filter((p) => !headIds.has(p.id));
+  const tail = combined.filter((p) => !headIds.has(p.id));
   return [...head, ...tail];
 }
 
+function flatCustomTags(items: Record<PantryCategory, PantryPreset[]>): { id: string; label: string }[] {
+  return Object.values(items).flat();
+}
+
 export function HomeScreen() {
+  const ctaFooterRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { show } = useToast();
   const { tasteContext, refreshTaste } = useMesiTaste();
@@ -116,8 +132,14 @@ export function HomeScreen() {
   });
 
   const [selectedPantry, setSelectedPantry] = useState<Set<string>>(() => new Set());
-  const [customTags, setCustomTags] = useState<{ id: string; label: string }[]>([]);
-  const [customInput, setCustomInput] = useState("");
+  const [customItems, setCustomItems] = useState<Record<PantryCategory, PantryPreset[]>>(() =>
+    emptyCustomItems(),
+  );
+
+  const [addSheetState, setAddSheetState] = useState<{
+    open: boolean;
+    categoryId: PantryCategory | null;
+  }>({ open: false, categoryId: null });
 
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [loadingRandom, setLoadingRandom] = useState(false);
@@ -129,12 +151,14 @@ export function HomeScreen() {
   const [prepDayCount, setPrepDayCount] = useState(3);
 
   const [apiError, setApiError] = useState<string | null>(null);
+  const [pantryReady, setPantryReady] = useState(false);
 
   const refreshMeta = useCallback(async () => {
     setMetaLoadError(null);
     try {
       const s = await listIngredientStats();
       setStats(s);
+      setCustomItems(hydrateCustomItemsFromStats(s));
     } catch (e) {
       console.error(e);
       setMetaLoadError(getUserFriendlyFirestoreMessage(e));
@@ -148,9 +172,12 @@ export function HomeScreen() {
         const s = await listIngredientStats();
         if (cancelled) return;
         setStats(s);
+        setCustomItems(hydrateCustomItemsFromStats(s));
+        setPantryReady(true);
       } catch (e) {
         console.error(e);
         if (!cancelled) setMetaLoadError(getUserFriendlyFirestoreMessage(e));
+        if (!cancelled) setPantryReady(true);
       }
     })();
     return () => {
@@ -169,11 +196,17 @@ export function HomeScreen() {
     setMealOn(payload.mealOn);
     setEffort(payload.effort);
     setSelectedPantry(new Set(payload.selectedPantryIds));
-    setCustomTags(payload.customTags);
+    setCustomItems((prev) => {
+      const map = new Map(prev.other.map((x) => [x.id, x] as const));
+      for (const t of payload.customTags) {
+        map.set(t.id, t);
+      }
+      return { ...prev, other: [...map.values()] };
+    });
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!pantryReady || typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("cookAgain") !== "1") return;
     const payload = readCookAgainPayload();
@@ -183,7 +216,7 @@ export function HomeScreen() {
     }
     applyCookAgainPayload(payload);
     router.replace("/", { scroll: false });
-  }, [router, applyCookAgainPayload]);
+  }, [pantryReady, router, applyCookAgainPayload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,13 +235,6 @@ export function HomeScreen() {
 
   const topIds = useMemo(() => topIngredientIds(stats, 5), [stats]);
 
-  const proteinRows = useMemo(
-    () => orderPresetsByTopIds(PROTEIN_PRESETS, topIds),
-    [topIds],
-  );
-  const vegRows = useMemo(() => orderPresetsByTopIds(VEG_PRESETS, topIds), [topIds]);
-  const carbRows = useMemo(() => orderPresetsByTopIds(CARB_PRESETS, topIds), [topIds]);
-
   const effectiveDiners = useMemo(() => {
     if (dinerPreset === "other") {
       const n = Number.parseInt(dinerOther, 10);
@@ -218,6 +244,27 @@ export function HomeScreen() {
     return Number.parseInt(dinerPreset, 10) as 1 | 2 | 3;
   }, [dinerPreset, dinerOther]);
 
+  const flatCustomList = useMemo(() => flatCustomTags(customItems), [customItems]);
+
+  const addSheetCategoryLabel = useMemo(() => {
+    if (!addSheetState.categoryId) return "";
+    return PANTRY_CATEGORIES.find((c) => c.id === addSheetState.categoryId)?.label ?? "";
+  }, [addSheetState.categoryId]);
+
+  const existingLabelsForSheet = useMemo(() => {
+    const id = addSheetState.categoryId;
+    if (!id) return new Set<string>();
+    const cat = PANTRY_CATEGORIES.find((c) => c.id === id);
+    const labels = new Set<string>();
+    if (cat) {
+      for (const p of cat.presets) labels.add(p.label.toLowerCase());
+    }
+    for (const p of customItems[id]) {
+      labels.add(p.label.toLowerCase());
+    }
+    return labels;
+  }, [addSheetState.categoryId, customItems]);
+
   const toggleMeal = (slot: MealSlot) => {
     setMealOn((m) => ({ ...m, [slot]: !m[slot] }));
   };
@@ -226,49 +273,90 @@ export function HomeScreen() {
     setEffort((x) => ({ ...x, [slot]: e }));
   };
 
-  const togglePantry = (id: string, label: string) => {
-    setSelectedPantry((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-        void incrementIngredientUse(id, label).catch((err) => console.error(err));
-      }
-      return next;
-    });
+  const openAddSheet = (catId: PantryCategory) => {
+    setAddSheetState({ open: true, categoryId: catId });
   };
 
-  const addCustomPantry = () => {
-    const t = customInput.trim();
-    if (!t) return;
-    const id = ingredientLineDocId(t);
-    if (customTags.some((c) => c.id === id) || selectedPantry.has(id)) {
-      setCustomInput("");
-      return;
+  const closeAddSheet = () => {
+    setAddSheetState({ open: false, categoryId: null });
+  };
+
+  const onAddFromSheet = async (categoryId: PantryCategory, item: PantryPreset) => {
+    setCustomItems((prev) => ({
+      ...prev,
+      [categoryId]: [...prev[categoryId], item],
+    }));
+    setSelectedPantry((prev) => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
+    try {
+      await incrementIngredientUse(item.id, item.label, {
+        category: categoryId,
+        isCustom: true,
+      });
+      await refreshMeta();
+    } catch (e) {
+      console.error(e);
     }
-    setCustomTags((c) => [...c, { id, label: t }]);
-    setSelectedPantry((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-    void incrementIngredientUse(id, t).catch((e) => console.error(e));
-    setCustomInput("");
   };
 
-  const toggleCustomTag = (id: string, label: string) => {
+  const removeCustomItem = async (categoryId: PantryCategory, item: PantryPreset) => {
+    setCustomItems((prev) => ({
+      ...prev,
+      [categoryId]: prev[categoryId].filter((x) => x.id !== item.id),
+    }));
+    setSelectedPantry((prev) => {
+      const next = new Set(prev);
+      next.delete(item.id);
+      return next;
+    });
+    try {
+      await deleteUserIngredient(item.id);
+      await refreshMeta();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const togglePantryPreset = (id: string, label: string) => {
+    const cat = getPresetCategoryById(id);
     setSelectedPantry((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
-        void incrementIngredientUse(id, label).catch((e) => console.error(e));
+        if (cat) {
+          void incrementIngredientUse(id, label, { category: cat, isCustom: false }).catch((err) =>
+            console.error(err),
+          );
+        } else {
+          void incrementIngredientUse(id, label).catch((err) => console.error(err));
+        }
       }
       return next;
     });
   };
+
+  const togglePantryCustom = (categoryId: PantryCategory, id: string, label: string) => {
+    setSelectedPantry((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        void incrementIngredientUse(id, label, { category: categoryId, isCustom: true }).catch((e) =>
+          console.error(e),
+        );
+      }
+      return next;
+    });
+  };
+
+  const isCustomRowItem = (item: PantryPreset, categoryPresets: PantryPreset[]) =>
+    !categoryPresets.some((p) => p.id === item.id);
 
   const runSuggestFlow = async () => {
     const enabled = SLOTS.some((s) => mealOn[s]);
@@ -286,7 +374,7 @@ export function HomeScreen() {
         servings: effectiveDiners,
         mealOn,
         effort,
-        selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, customTags),
+        selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, flatCustomList),
         tasteContext,
       });
 
@@ -393,7 +481,7 @@ export function HomeScreen() {
         servings: effectiveDiners,
         mealOn,
         effort,
-        selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, customTags),
+        selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, flatCustomList),
         prepDayCount,
         tasteContext,
       });
@@ -455,26 +543,133 @@ export function HomeScreen() {
     }
   };
 
-  const renderChip = (p: PantryPreset) => {
-    const on = selectedPantry.has(p.id);
+  const renderPantryChip = (
+    item: PantryPreset,
+    categoryId: PantryCategory,
+    categoryPresets: PantryPreset[],
+  ) => {
+    const on = selectedPantry.has(item.id);
+    const customRow = isCustomRowItem(item, categoryPresets);
+    const toggle = () =>
+      customRow
+        ? togglePantryCustom(categoryId, item.id, item.label)
+        : togglePantryPreset(item.id, item.label);
+
     return (
-      <button
-        key={p.id}
-        type="button"
-        onClick={() => togglePantry(p.id, p.label)}
+      <div
+        key={item.id}
         className={cn(
-          "min-h-11 rounded-full border px-3 py-2 text-left text-sm transition-colors",
+          "inline-flex max-w-full min-h-10 items-stretch overflow-hidden rounded-full border text-sm transition-colors",
           on
             ? "border-primary bg-primary text-primary-foreground"
-            : "border-border bg-card text-foreground hover:bg-muted",
+            : "border-muted-foreground/30 bg-card text-foreground",
         )}
       >
-        {p.label}
-      </button>
+        <button
+          type="button"
+          onClick={toggle}
+          className={cn(
+            "max-w-[min(100%,12rem)] min-h-10 px-3 py-1.5 text-left",
+            on ? "" : "hover:bg-muted",
+          )}
+        >
+          <span className="truncate">{item.label}</span>
+        </button>
+        {customRow ? (
+          <button
+            type="button"
+            onClick={() => void removeCustomItem(categoryId, item)}
+            className={cn(
+              "border-border shrink-0 border-l px-2 transition-colors",
+              on
+                ? "hover:bg-primary/90 text-primary-foreground"
+                : "text-muted-foreground hover:bg-destructive/15 hover:text-destructive",
+            )}
+            aria-label={`Xoá ${item.label}`}
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
     );
   };
 
   const ctaBusy = loadingMenu || loadingRandom || loadingPrep;
+
+  const visibleCategories = PANTRY_CATEGORIES.filter((c) => {
+    if (c.id === "other") return customItems.other.length > 0;
+    return true;
+  });
+
+  // #region agent log
+  useLayoutEffect(() => {
+    const logCtaGeometry = () => {
+      const el = ctaFooterRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const row = el.querySelector(":scope > div.flex");
+      let transformAncestor: string | null = null;
+      let p: HTMLElement | null = el;
+      for (let i = 0; i < 24 && p; i++) {
+        const s = getComputedStyle(p);
+        if (s.transform !== "none" || s.filter !== "none" || (s as CSSStyleDeclaration & { perspective?: string }).perspective !== "none") {
+          transformAncestor = `${p.tagName}.${String(p.className || "").slice(0, 120)}`;
+          break;
+        }
+        p = p.parentElement;
+      }
+      const buttons = el.querySelectorAll("button");
+      const b0 = buttons[0];
+      const b1 = buttons[1];
+      const r0 = b0?.getBoundingClientRect();
+      const r1 = b1?.getBoundingClientRect();
+      const rowEl = row instanceof HTMLElement ? row : null;
+      fetch("http://127.0.0.1:7903/ingest/69ee3f07-8394-40e6-ae46-c337db3ba930", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0badeb" },
+        body: JSON.stringify({
+          sessionId: "0badeb",
+          location: "HomeScreen.tsx:ctaFooterMeasure",
+          message: "cta footer geometry",
+          data: {
+            innerWidth: window.innerWidth,
+            docClientWidth: document.documentElement.clientWidth,
+            footerLeft: rect.left,
+            footerRight: rect.right,
+            footerWidth: rect.width,
+            padL: cs.paddingLeft,
+            padR: cs.paddingRight,
+            footerScrollW: el.scrollWidth,
+            footerClientW: el.clientWidth,
+            rowScrollW: rowEl?.scrollWidth ?? null,
+            rowClientW: rowEl?.clientWidth ?? null,
+            rowOverflow: rowEl ? rowEl.scrollWidth > rowEl.clientWidth + 0.5 : null,
+            btn0Left: r0?.left,
+            btn0Right: r0?.right,
+            btn0Width: r0?.width,
+            btn1Left: r1?.left,
+            btn1Width: r1?.width,
+            transformAncestor,
+            deltaBtn0ToFooterInnerLeft: r0 != null ? r0.left - rect.left - parseFloat(cs.paddingLeft || "0") : null,
+          },
+          timestamp: Date.now(),
+          hypothesisId: "A-E",
+          runId: "pre-fix",
+        }),
+      }).catch(() => {});
+    };
+    logCtaGeometry();
+    window.addEventListener("resize", logCtaGeometry);
+    const el = ctaFooterRef.current;
+    const ro = new ResizeObserver(() => logCtaGeometry());
+    if (el) ro.observe(el);
+    return () => {
+      window.removeEventListener("resize", logCtaGeometry);
+      ro.disconnect();
+    };
+  }, []);
+  // #endregion
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col">
@@ -656,67 +851,57 @@ export function HomeScreen() {
             ))}
           </section>
 
-          <section className="space-y-3">
+          <section className="space-y-4">
             <h2 className="text-foreground text-sm font-medium">Nhà đang có gì?</h2>
 
-            <div className="space-y-2">
-              <p className="text-muted-foreground text-xs font-medium">Protein</p>
-              <div className="flex flex-wrap gap-2">{proteinRows.map((p) => renderChip(p))}</div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-muted-foreground text-xs font-medium">Rau / củ</p>
-              <div className="flex flex-wrap gap-2">{vegRows.map((p) => renderChip(p))}</div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-muted-foreground text-xs font-medium">Tinh bột</p>
-              <div className="flex flex-wrap gap-2">{carbRows.map((p) => renderChip(p))}</div>
-            </div>
-
-            {customTags.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {customTags.map((c) => {
-                  const on = selectedPantry.has(c.id);
-                  return (
+            {visibleCategories.map((cat) => {
+              const rows = orderCategoryRows(cat.presets, customItems[cat.id], topIds);
+              return (
+                <div key={cat.id} className="space-y-1.5">
+                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{cat.label}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {rows.map((item) => renderPantryChip(item, cat.id, cat.presets))}
                     <button
-                      key={c.id}
                       type="button"
-                      onClick={() => toggleCustomTag(c.id, c.label)}
-                      className={cn(
-                        "min-h-11 rounded-full border px-3 py-2 text-sm",
-                        on
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card",
-                      )}
+                      onClick={() => openAddSheet(cat.id)}
+                      className="border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary inline-flex min-h-10 items-center gap-1 rounded-full border border-dashed px-3 py-1.5 text-sm transition-colors"
+                      aria-label={`Thêm nguyên liệu vào ${cat.label}`}
                     >
-                      {c.label}
+                      <Plus className="size-3.5 shrink-0" aria-hidden />
+                      Thêm
                     </button>
-                  );
-                })}
-              </div>
-            ) : null}
+                  </div>
+                </div>
+              );
+            })}
 
-            <div className="flex gap-2">
-              <Input
-                placeholder="Thêm nguyên liệu khác…"
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addCustomPantry();
-                  }
-                }}
-                className="min-h-11 flex-1 text-base"
-              />
-              <Button type="button" variant="secondary" className="min-h-11 shrink-0" onClick={addCustomPantry}>
-                Thêm
-              </Button>
-            </div>
+            {customItems.other.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => openAddSheet("other")}
+                className="text-muted-foreground hover:text-primary mt-1 inline-flex items-center gap-1.5 text-sm transition-colors"
+              >
+                <Plus className="size-4 shrink-0" aria-hidden />
+                Thêm nguyên liệu khác
+              </button>
+            ) : null}
           </section>
         </div>
       </div>
 
+      <AddIngredientSheet
+        open={addSheetState.open}
+        categoryId={addSheetState.categoryId}
+        categoryLabel={addSheetCategoryLabel}
+        existingLabelsLower={existingLabelsForSheet}
+        onAdd={(cat, item) => {
+          void onAddFromSheet(cat, item);
+        }}
+        onClose={closeAddSheet}
+      />
+
       <div
+        ref={ctaFooterRef}
         className={cn(
           "border-border bg-background/95 supports-[backdrop-filter]:bg-background/85 mx-auto w-full max-w-[430px] border-t px-4 pt-3 pb-2 backdrop-blur-sm",
           "max-md:fixed max-md:right-0 max-md:left-0 max-md:z-40 max-md:bottom-[var(--bottom-nav-height,4rem)]",
