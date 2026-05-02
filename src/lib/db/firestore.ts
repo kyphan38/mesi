@@ -75,7 +75,8 @@ export function getDefaultHealthProfile(): HealthProfileDoc {
     updatedAt: now,
     avoidFoodPresetIds: ["refined_sugar", "dairy", "bad_fats"],
     customAvoidLabels: [],
-    nutritionGoal: "eat_clean_skin",
+    nutritionGoalIds: ["eat_clean_skin"],
+    customNutritionLabels: [],
     supplements,
     waterTargetLiters: 2,
   };
@@ -97,8 +98,21 @@ function coerceHealthProfile(raw: Record<string, unknown> | undefined): HealthPr
   const customAvoidLabels = Array.isArray(raw.customAvoidLabels)
     ? (raw.customAvoidLabels as unknown[]).filter((x): x is string => typeof x === "string")
     : defaults.customAvoidLabels;
-  const nutritionGoal =
-    typeof raw.nutritionGoal === "string" ? raw.nutritionGoal : defaults.nutritionGoal;
+
+  let nutritionGoalIds = defaults.nutritionGoalIds;
+  if (Array.isArray(raw.nutritionGoalIds)) {
+    nutritionGoalIds = (raw.nutritionGoalIds as unknown[]).filter(
+      (x): x is string => typeof x === "string",
+    );
+  } else if (typeof raw.nutritionGoal === "string" && raw.nutritionGoal.trim()) {
+    nutritionGoalIds = [raw.nutritionGoal.trim()];
+  }
+  if (nutritionGoalIds.length === 0) nutritionGoalIds = defaults.nutritionGoalIds;
+
+  const customNutritionLabels = Array.isArray(raw.customNutritionLabels)
+    ? (raw.customNutritionLabels as unknown[]).filter((x): x is string => typeof x === "string")
+    : [];
+
   const waterTargetLiters =
     typeof raw.waterTargetLiters === "number" && Number.isFinite(raw.waterTargetLiters)
       ? raw.waterTargetLiters
@@ -123,7 +137,15 @@ function coerceHealthProfile(raw: Record<string, unknown> | undefined): HealthPr
             : preset?.suggestedTime ?? "";
         const userTime =
           typeof o.userTime === "string" && o.userTime.trim() ? o.userTime.trim() : undefined;
-        return { id, label, suggestedTime, ...(userTime ? { userTime } : {}) };
+        const dosageNote =
+          typeof o.dosageNote === "string" && o.dosageNote.trim() ? o.dosageNote.trim() : undefined;
+        return {
+          id,
+          label,
+          suggestedTime,
+          ...(userTime ? { userTime } : {}),
+          ...(dosageNote ? { dosageNote } : {}),
+        };
       })
       .filter((x): x is SupplementEntry => x !== null);
   }
@@ -134,7 +156,8 @@ function coerceHealthProfile(raw: Record<string, unknown> | undefined): HealthPr
     updatedAt,
     avoidFoodPresetIds,
     customAvoidLabels,
-    nutritionGoal,
+    nutritionGoalIds,
+    customNutritionLabels,
     supplements,
     waterTargetLiters,
   };

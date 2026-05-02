@@ -7,6 +7,8 @@ export interface SupplementEntry {
   suggestedTime: string;
   /** User override for intake time hint */
   userTime?: string;
+  /** Free-text dosing (e.g. "2 viên/ngày, mỗi viên 500mg") */
+  dosageNote?: string;
 }
 
 export interface HealthProfileDoc {
@@ -15,7 +17,8 @@ export interface HealthProfileDoc {
   updatedAt: number;
   avoidFoodPresetIds: string[];
   customAvoidLabels: string[];
-  nutritionGoal: string;
+  nutritionGoalIds: string[];
+  customNutritionLabels: string[];
   supplements: SupplementEntry[];
   waterTargetLiters: number;
 }
