@@ -66,7 +66,6 @@ export function getDefaultHealthProfile(): HealthProfileDoc {
     return {
       id: p.id,
       label: p.label,
-      suggestedTime: p.suggestedTime,
     };
   });
   return {
@@ -131,21 +130,7 @@ function coerceHealthProfile(raw: Record<string, unknown> | undefined): HealthPr
           typeof o.label === "string" && o.label.trim()
             ? o.label.trim()
             : preset?.label ?? id;
-        const suggestedTime =
-          typeof o.suggestedTime === "string" && o.suggestedTime.trim()
-            ? o.suggestedTime.trim()
-            : preset?.suggestedTime ?? "";
-        const userTime =
-          typeof o.userTime === "string" && o.userTime.trim() ? o.userTime.trim() : undefined;
-        const dosageNote =
-          typeof o.dosageNote === "string" && o.dosageNote.trim() ? o.dosageNote.trim() : undefined;
-        return {
-          id,
-          label,
-          suggestedTime,
-          ...(userTime ? { userTime } : {}),
-          ...(dosageNote ? { dosageNote } : {}),
-        };
+        return { id, label };
       })
       .filter((x): x is SupplementEntry => x !== null);
   }

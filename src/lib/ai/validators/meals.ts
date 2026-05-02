@@ -1,6 +1,67 @@
 import { z } from "zod";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 
+/** Gemini often returns ingredients / missing_ingredients as one Vietnamese sentence; schema expects string[]. */
+function coerceToStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((x) => (typeof x === "string" ? x : String(x)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const parts = value.split(/[,，;、]/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts;
+    const t = value.trim();
+    return t ? [t] : [];
+  }
+  return [];
+}
+
+function normalizeOneMealOption(opt: unknown): unknown {
+  if (opt == null || typeof opt !== "object" || Array.isArray(opt)) return opt;
+  const o = { ...(opt as Record<string, unknown>) };
+  o.ingredients = coerceToStringList(o.ingredients);
+  o.missing_ingredients = coerceToStringList(o.missing_ingredients);
+  return o;
+}
+
+function normalizeSuggestMealsGeminiOutput(parsed: unknown, slots: ApiMealTime[]): unknown {
+  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
+  const root = { ...(parsed as Record<string, unknown>) };
+  const meals = root.meals;
+  if (meals == null || typeof meals !== "object" || Array.isArray(meals)) return parsed;
+  const mealsOut: Record<string, unknown> = { ...(meals as Record<string, unknown>) };
+  for (const slot of slots) {
+    const arr = mealsOut[slot];
+    if (!Array.isArray(arr)) continue;
+    mealsOut[slot] = arr.map((item) => normalizeOneMealOption(item));
+  }
+  root.meals = mealsOut;
+  return root;
+}
+
+function normalizeMealPrepGeminiOutput(parsed: unknown): unknown {
+  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
+  const root = { ...(parsed as Record<string, unknown>) };
+  const sched = root.meal_schedule;
+  if (!Array.isArray(sched)) return parsed;
+  root.meal_schedule = sched.map((row) => {
+    if (row == null || typeof row !== "object" || Array.isArray(row)) return row;
+    const r = { ...(row as Record<string, unknown>) };
+    r.meal = normalizeOneMealOption(r.meal);
+    return r;
+  });
+  return root;
+}
+
+function normalizeAdjustMealGeminiOutput(parsed: unknown): unknown {
+  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
+  const root = { ...(parsed as Record<string, unknown>) };
+  if ("meal" in root) root.meal = normalizeOneMealOption(root.meal);
+  return root;
+}
+
 export function stripJsonFences(text: string): string {
   const trimmed = text.trim();
   const m = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -58,6 +119,7 @@ export function parseSuggestMealsJson(
   } catch {
     return { success: false, error: "Invalid JSON from model" };
   }
+  parsed = normalizeSuggestMealsGeminiOutput(parsed, slots);
   const schema = buildSuggestMealsResponseSchema(slots);
   const out = schema.safeParse(parsed);
   if (!out.success) {
@@ -80,6 +142,7 @@ export function parseAdjustMealJson(raw: string): ParseMealsResult<AdjustMealPar
   } catch {
     return { success: false, error: "Invalid JSON from model" };
   }
+  parsed = normalizeAdjustMealGeminiOutput(parsed);
   const out = adjustMealResponseSchema.safeParse(parsed);
   if (!out.success) {
     return { success: false, error: out.error.message };
@@ -169,6 +232,7 @@ export function parseSuggestMealPrepJson(
   } catch {
     return { success: false, error: "Invalid JSON from model" };
   }
+  parsed = normalizeMealPrepGeminiOutput(parsed);
   const out = suggestMealPrepResponseSchema.safeParse(parsed);
   if (!out.success) {
     return { success: false, error: out.error.message };

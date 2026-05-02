@@ -21,11 +21,17 @@ import {
   getHealthProfile,
   saveHealthProfile,
 } from "@/lib/db/firestore";
+import { getUserFriendlyFirestoreMessage } from "@/lib/db/firestore-errors";
 import type { HealthProfileDoc, SupplementEntry } from "@/types/health-profile";
 
 const WATER_MIN = 1.5;
 const WATER_MAX = 4;
 const WATER_STEP = 0.5;
+const WATER_QUICK_PRESETS = [2, 2.5, 3, 3.5] as const;
+
+function isQuickWaterLiters(v: number): boolean {
+  return WATER_QUICK_PRESETS.some((w) => Math.abs(w - v) < 0.001);
+}
 
 function clampWaterLiters(v: number): number {
   const snapped = Math.round((v - WATER_MIN) / WATER_STEP) * WATER_STEP + WATER_MIN;
@@ -39,7 +45,7 @@ export type HealthProfileFormProps = {
   showIntro?: boolean;
 };
 
-type CustomSuppRow = { id: string; label: string; userTime: string; dosageNote: string };
+type CustomSuppRow = { id: string; label: string };
 
 export function HealthProfileForm({
   redirectAfterSave,
@@ -59,11 +65,10 @@ export function HealthProfileForm({
   const [customNutritionLabels, setCustomNutritionLabels] = useState<string[]>([]);
   const [customNutritionInput, setCustomNutritionInput] = useState("");
   const [presetSuppIds, setPresetSuppIds] = useState<string[]>([]);
-  const [userTimeById, setUserTimeById] = useState<Record<string, string>>({});
-  const [dosageNoteByPresetId, setDosageNoteByPresetId] = useState<Record<string, string>>({});
   const [customSupps, setCustomSupps] = useState<CustomSuppRow[]>([]);
   const [customSuppLabel, setCustomSuppLabel] = useState("");
   const [waterLiters, setWaterLiters] = useState(2);
+  const [waterOtherOpen, setWaterOtherOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const applyDoc = useCallback((doc: HealthProfileDoc) => {
@@ -74,30 +79,24 @@ export function HealthProfileForm({
       doc.nutritionGoalIds.length > 0 ? [...doc.nutritionGoalIds] : ["eat_clean_skin"],
     );
     setCustomNutritionLabels([...doc.customNutritionLabels]);
-    setWaterLiters(clampWaterLiters(doc.waterTargetLiters));
+    const w = clampWaterLiters(doc.waterTargetLiters);
+    setWaterLiters(w);
+    setWaterOtherOpen(!isQuickWaterLiters(w));
 
     const presets: string[] = [];
-    const times: Record<string, string> = {};
-    const dosage: Record<string, string> = {};
     const customs: CustomSuppRow[] = [];
 
     for (const row of doc.supplements) {
       if (getSupplementPreset(row.id)) {
         presets.push(row.id);
-        if (row.userTime) times[row.id] = row.userTime;
-        if (row.dosageNote) dosage[row.id] = row.dosageNote;
       } else {
         customs.push({
           id: row.id,
           label: row.label,
-          userTime: row.userTime ?? "",
-          dosageNote: row.dosageNote ?? "",
         });
       }
     }
     setPresetSuppIds(presets);
-    setUserTimeById(times);
-    setDosageNoteByPresetId(dosage);
     setCustomSupps(customs);
   }, []);
 
@@ -111,8 +110,9 @@ export function HealthProfileForm({
         if (doc) applyDoc(doc);
         else applyDoc(getDefaultHealthProfile());
       } catch (e) {
+        console.error(e);
         if (!cancelled) {
-          setLoadError(e instanceof Error ? e.message : "Không tải được hồ sơ.");
+          setLoadError(getUserFriendlyFirestoreMessage(e));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -158,29 +158,16 @@ export function HealthProfileForm({
   };
 
   const togglePresetSupp = (id: string) => {
-    setPresetSuppIds((prev) => {
-      if (prev.includes(id)) {
-        setUserTimeById((m) => {
-          const next = { ...m };
-          delete next[id];
-          return next;
-        });
-        setDosageNoteByPresetId((m) => {
-          const next = { ...m };
-          delete next[id];
-          return next;
-        });
-        return prev.filter((x) => x !== id);
-      }
-      return [...prev, id];
-    });
+    setPresetSuppIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   };
 
   const addCustomSupp = () => {
     const label = customSuppLabel.trim();
     if (!label) return;
     const id = `custom_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-    setCustomSupps((prev) => [...prev, { id, label, userTime: "", dosageNote: "" }]);
+    setCustomSupps((prev) => [...prev, { id, label }]);
     setCustomSuppLabel("");
   };
 
@@ -193,29 +180,13 @@ export function HealthProfileForm({
     for (const id of presetSuppIds) {
       const p = getSupplementPreset(id);
       if (!p) continue;
-      const ut = userTimeById[id]?.trim();
-      const dn = dosageNoteByPresetId[id]?.trim();
-      rows.push({
-        id: p.id,
-        label: p.label,
-        suggestedTime: p.suggestedTime,
-        ...(ut ? { userTime: ut } : {}),
-        ...(dn ? { dosageNote: dn } : {}),
-      });
+      rows.push({ id: p.id, label: p.label });
     }
     for (const c of customSupps) {
-      const ut = c.userTime.trim();
-      const dn = c.dosageNote.trim();
-      rows.push({
-        id: c.id,
-        label: c.label,
-        suggestedTime: "Theo gợi ý bác sĩ",
-        ...(ut ? { userTime: ut } : {}),
-        ...(dn ? { dosageNote: dn } : {}),
-      });
+      rows.push({ id: c.id, label: c.label });
     }
     return rows;
-  }, [presetSuppIds, userTimeById, dosageNoteByPresetId, customSupps]);
+  }, [presetSuppIds, customSupps]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,8 +261,34 @@ export function HealthProfileForm({
       {loadError ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" />
-          <AlertTitle>Lỗi</AlertTitle>
-          <AlertDescription>{loadError}</AlertDescription>
+          <AlertTitle>Không tải được dữ liệu</AlertTitle>
+          <AlertDescription className="flex flex-col gap-2">
+            <span>{loadError}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-fit"
+              onClick={() => {
+                setLoading(true);
+                setLoadError(null);
+                void (async () => {
+                  try {
+                    const doc = await getHealthProfile();
+                    if (doc) applyDoc(doc);
+                    else applyDoc(getDefaultHealthProfile());
+                  } catch (e) {
+                    console.error(e);
+                    setLoadError(getUserFriendlyFirestoreMessage(e));
+                  } finally {
+                    setLoading(false);
+                  }
+                })();
+              }}
+            >
+              Thử lại
+            </Button>
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -404,6 +401,9 @@ export function HealthProfileForm({
 
       <section className="space-y-3">
         <h2 className="text-foreground text-base font-medium">Supplement đang dùng</h2>
+        <p className="text-muted-foreground text-xs">
+          Chọn bổ sung — thời điểm uống sẽ được gợi ý trên màn hình thực đơn.
+        </p>
         <div className="flex flex-wrap gap-2">
           {SUPPLEMENT_PRESETS.map((p) => (
             <button
@@ -421,38 +421,6 @@ export function HealthProfileForm({
             </button>
           ))}
         </div>
-        {presetSuppIds.map((id) => {
-          const p = getSupplementPreset(id);
-          if (!p) return null;
-          return (
-            <div key={id} className="border-border bg-card/50 space-y-2 rounded-xl border p-3">
-              <p className="text-foreground text-sm font-medium">{p.label}</p>
-              <p className="text-muted-foreground text-xs">Gợi ý: {p.suggestedTime}</p>
-              <label className="text-muted-foreground block text-xs font-medium">
-                Liều uống / ghi chú
-                <Input
-                  className="mt-1 min-h-11 text-base sm:min-h-8"
-                  placeholder="vd. 2 viên/ngày, 500mg/viên"
-                  value={dosageNoteByPresetId[id] ?? ""}
-                  onChange={(e) =>
-                    setDosageNoteByPresetId((m) => ({ ...m, [id]: e.target.value }))
-                  }
-                />
-              </label>
-              <label className="text-muted-foreground block text-xs font-medium">
-                Giờ uống (tuỳ chỉnh)
-                <Input
-                  className="mt-1 min-h-11 text-base sm:min-h-8"
-                  placeholder="vd. 8:00"
-                  value={userTimeById[id] ?? ""}
-                  onChange={(e) =>
-                    setUserTimeById((m) => ({ ...m, [id]: e.target.value }))
-                  }
-                />
-              </label>
-            </div>
-          );
-        })}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
@@ -467,49 +435,21 @@ export function HealthProfileForm({
           </Button>
         </div>
         {customSupps.length > 0 ? (
-          <ul className="space-y-3">
+          <ul className="flex flex-wrap gap-2">
             {customSupps.map((c) => (
-              <li key={c.id} className="border-border bg-card/50 space-y-2 rounded-xl border p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-foreground text-sm font-medium">{c.label}</span>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-destructive text-sm"
-                    onClick={() => removeCustomSupp(c.id)}
-                  >
-                    Xóa
-                  </button>
-                </div>
-                <label className="text-muted-foreground block text-xs font-medium">
-                  Liều uống / ghi chú
-                  <Input
-                    className="mt-1 min-h-11 text-base sm:min-h-8"
-                    placeholder="vd. 1 gói sau ăn"
-                    value={c.dosageNote}
-                    onChange={(e) =>
-                      setCustomSupps((prev) =>
-                        prev.map((r) =>
-                          r.id === c.id ? { ...r, dosageNote: e.target.value } : r,
-                        ),
-                      )
-                    }
-                  />
-                </label>
-                <label className="text-muted-foreground block text-xs font-medium">
-                  Giờ uống (tuỳ chỉnh)
-                  <Input
-                    className="mt-1 min-h-11 text-base sm:min-h-8"
-                    placeholder="vd. sau ăn tối"
-                    value={c.userTime}
-                    onChange={(e) =>
-                      setCustomSupps((prev) =>
-                        prev.map((r) =>
-                          r.id === c.id ? { ...r, userTime: e.target.value } : r,
-                        ),
-                      )
-                    }
-                  />
-                </label>
+              <li
+                key={c.id}
+                className="bg-muted text-foreground flex items-center gap-1 rounded-full py-1 pr-1 pl-3 text-sm"
+              >
+                {c.label}
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-lg leading-none"
+                  onClick={() => removeCustomSupp(c.id)}
+                  aria-label={`Xóa ${c.label}`}
+                >
+                  ×
+                </button>
               </li>
             ))}
           </ul>
@@ -518,24 +458,48 @@ export function HealthProfileForm({
 
       <section className="space-y-3">
         <h2 className="text-foreground text-base font-medium">Lượng nước mục tiêu / ngày</h2>
-        <div className="space-y-2">
-          <input
-            type="range"
-            min={WATER_MIN}
-            max={WATER_MAX}
-            step={WATER_STEP}
-            value={waterLiters}
-            onChange={(e) => setWaterLiters(clampWaterLiters(Number.parseFloat(e.target.value)))}
-            className="accent-primary h-2 w-full cursor-pointer"
-            aria-label="Lượng nước (lít)"
-          />
-          <p className="text-foreground text-center text-lg font-medium tabular-nums">
-            {waterLiters.toFixed(1)} L
-          </p>
-          <p className="text-muted-foreground text-center text-xs">
-            {WATER_MIN}–{WATER_MAX} L (bước {WATER_STEP} L)
-          </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {WATER_QUICK_PRESETS.map((v) => (
+            <Button
+              key={v}
+              type="button"
+              variant={isQuickWaterLiters(waterLiters) && Math.abs(waterLiters - v) < 0.001 ? "default" : "outline"}
+              className="min-h-11 min-w-[3.5rem] flex-1"
+              onClick={() => {
+                setWaterLiters(v);
+                setWaterOtherOpen(false);
+              }}
+            >
+              {v} L
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant={waterOtherOpen || !isQuickWaterLiters(waterLiters) ? "default" : "outline"}
+            className="min-h-11 shrink-0"
+            onClick={() => setWaterOtherOpen(true)}
+          >
+            Khác
+          </Button>
         </div>
+        {waterOtherOpen || !isQuickWaterLiters(waterLiters) ? (
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">
+              {WATER_MIN}–{WATER_MAX} L (bước {WATER_STEP} L)
+            </p>
+            <Input
+              type="number"
+              min={WATER_MIN}
+              max={WATER_MAX}
+              step={WATER_STEP}
+              className="min-h-11 max-w-[8rem] text-base sm:min-h-8"
+              value={Number.isFinite(waterLiters) ? waterLiters : WATER_MIN}
+              onChange={(e) => setWaterLiters(clampWaterLiters(Number.parseFloat(e.target.value)))}
+              aria-label="Lượng nước tùy chỉnh (lít)"
+            />
+          </div>
+        ) : null}
+        <p className="text-foreground text-sm font-medium tabular-nums">Đang chọn: {waterLiters.toFixed(1)} L</p>
       </section>
 
         <Button type="submit" className="min-h-12 w-full text-base sm:min-h-9" disabled={saving}>

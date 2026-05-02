@@ -57,6 +57,13 @@ export function buildCoreHealthSystemInstruction(hp: HealthProfilePayload): stri
     "",
     `MỤC TIÊU DINH DƯỠNG (khóa API): ${hp.goal}`,
     `ĐANG UỐNG SUPPLEMENT: ${supp} — gợi ý timing uống hợp lý trong plan (có thể tóm tắt trong supplement_plan_hint nếu có).`,
+    "",
+    "QUY TẮC GỢI Ý UỐNG SUPPLEMENT (khi viết supplement_plan_hint hoặc nhắc user):",
+    "Dầu cá (Omega-3): uống sau bữa có chất béo (sáng hoặc trưa).",
+    "Vitamin C: uống giữa buổi sáng hoặc sau bữa trưa.",
+    "Vitamin D: uống sau bữa có chất béo.",
+    "Kẽm: uống trước bữa tối 30 phút hoặc trước ngủ.",
+    "Probiotic: uống lúc bụng đói, sáng sớm trước bữa.",
     seasonContextPromptBlock(),
   ].join("\n");
 }

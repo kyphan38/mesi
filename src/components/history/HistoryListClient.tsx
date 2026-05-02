@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { History as HistoryIcon, SmilePlus, UtensilsCrossed } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import { listConfirmedMealsForHistory, type MealDocWithId } from "@/lib/db/meals";
+import { getUserFriendlyFirestoreMessage } from "@/lib/db/firestore-errors";
 import { buildHistoryListItems, type HistoryListItem } from "@/lib/history/group-history";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
@@ -53,6 +55,7 @@ function HistoryCardSkeleton() {
 }
 
 export function HistoryListClient() {
+  const router = useRouter();
   const [rows, setRows] = useState<MealDocWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [onlyGood, setOnlyGood] = useState(false);
@@ -66,7 +69,7 @@ export function HistoryListClient() {
       setRows(r);
     } catch (e) {
       console.error(e);
-      setLoadError(e instanceof Error ? e.message : "Không tải được lịch sử.");
+      setLoadError(getUserFriendlyFirestoreMessage(e));
     } finally {
       setLoading(false);
     }
@@ -81,6 +84,8 @@ export function HistoryListClient() {
     () => (onlyGood ? items.filter(passesGoodFilter) : items),
     [items, onlyGood],
   );
+
+  const showFilterRow = rows.length >= 1;
 
   return (
     <div className="bg-background min-h-0 flex-1">
@@ -111,20 +116,22 @@ export function HistoryListClient() {
           </Alert>
         ) : null}
 
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-muted-foreground text-xs">Đánh dấu “ngon” để Mesi học khẩu vị.</p>
-          <Button
-            type="button"
-            variant={onlyGood ? "default" : "outline"}
-            size="sm"
-            className="min-h-11 gap-1"
-            disabled={loading || !!loadError}
-            onClick={() => setOnlyGood((x) => !x)}
-          >
-            <SmilePlus className="size-4" />
-            Chỉ món ngon
-          </Button>
-        </div>
+        {showFilterRow ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-muted-foreground text-xs">Đánh dấu “ngon” để Mesi học khẩu vị.</p>
+            <Button
+              type="button"
+              variant={onlyGood ? "default" : "outline"}
+              size="sm"
+              className="min-h-11 gap-1"
+              disabled={loading || !!loadError}
+              onClick={() => setOnlyGood((x) => !x)}
+            >
+              <SmilePlus className="size-4" />
+              Chỉ món ngon
+            </Button>
+          </div>
+        ) : null}
 
         {loading ? (
           <div className="space-y-3">
@@ -134,18 +141,30 @@ export function HistoryListClient() {
           </div>
         ) : filtered.length === 0 && !loadError ? (
           <div className="flex min-h-[45vh] flex-col items-center justify-center gap-4 px-2 text-center">
-            <UtensilsCrossed className="text-muted-foreground size-14 opacity-60" aria-hidden />
-            <p className="text-foreground text-base font-medium">
-              {onlyGood ? "Chưa có món được đánh dấu ngon" : "Chưa có thực đơn đã lưu"}
-            </p>
-            <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
-              {onlyGood
-                ? "Đánh giá “Ngon” sau khi ăn để Mesi nhớ khẩu vị của bạn."
-                : "Lên thực đơn từ trang chủ — các bữa đã lưu sẽ xuất hiện ở đây."}
-            </p>
-            <Link href="/" className={buttonVariants({ variant: "secondary" })}>
-              Về trang chủ
-            </Link>
+            <UtensilsCrossed
+              className="text-muted-foreground/50 size-16 h-16 w-16 shrink-0"
+              aria-hidden
+              strokeWidth={1.25}
+            />
+            {rows.length === 0 ? (
+              <>
+                <p className="text-foreground text-lg font-medium">Chưa có thực đơn nào</p>
+                <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">Lên plan bữa đầu tiên ngay!</p>
+                <Button type="button" className="min-h-11" onClick={() => router.push("/")}>
+                  Lên thực đơn
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-foreground text-base font-medium">Chưa có món được đánh dấu ngon</p>
+                <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
+                  Đánh giá “Ngon” sau khi ăn để Mesi nhớ khẩu vị của bạn.
+                </p>
+                <Link href="/" className={buttonVariants({ variant: "secondary" })}>
+                  Về trang chủ
+                </Link>
+              </>
+            )}
           </div>
         ) : loadError ? null : (
           <div className="space-y-3">

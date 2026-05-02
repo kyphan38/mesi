@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { History, User } from "lucide-react";
+import { History, Shuffle, User } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,8 @@ import { useToast } from "@/components/ui/toast";
 import { useMesiTaste } from "@/components/providers/MesiTasteProvider";
 import { cn } from "@/lib/utils";
 import {
-  ALL_PANTRY_PRESETS,
   CARB_PRESETS,
+  getPantryPreset,
   PROTEIN_PRESETS,
   type PantryPreset,
   VEG_PRESETS,
@@ -24,10 +24,8 @@ import {
   topIngredientIds,
   type IngredientStat,
 } from "@/lib/db/ingredients";
-import {
-  countDistinctIntentDays,
-  recordPlanIntentForToday,
-} from "@/lib/db/plan-intents";
+import { recordPlanIntentForToday } from "@/lib/db/plan-intents";
+import { getUserFriendlyFirestoreMessage } from "@/lib/db/firestore-errors";
 import { apiFetch } from "@/lib/api/api-fetch";
 import { getDefaultHealthProfile, getHealthProfile } from "@/lib/db/firestore";
 import {
@@ -55,13 +53,14 @@ const MEAL_LABELS: Record<MealSlot, string> = {
   evening: "Tối",
 };
 
+const SLOTS: MealSlot[] = ["morning", "afternoon", "evening"];
+
 const EFFORT_OPTIONS: { id: Effort; label: string }[] = [
   { id: "quick", label: "Nhanh (<15 phút)" },
   { id: "medium", label: "Vừa (15–30 phút)" },
   { id: "high", label: "Kỳ công (>30 phút)" },
 ];
 
-/** Compact labels for native select / one-line UI */
 const EFFORT_SELECT_LABEL: Record<Effort, string> = {
   quick: "Nhanh (<15p)",
   medium: "Vừa (15–30p)",
@@ -74,12 +73,33 @@ const SLOT_EMOJI: Record<MealSlot, string> = {
   evening: "🌙",
 };
 
+const RANDOM_FALLBACK_IDS = ["egg", "chicken_breast", "tomato", "rice", "spinach"] as const;
+
+const ALL_QUICK_EFFORT: Record<MealSlot, Effort> = {
+  morning: "quick",
+  afternoon: "quick",
+  evening: "quick",
+};
+
+function orderPresetsByTopIds(presets: PantryPreset[], topIds: string[]): PantryPreset[] {
+  const inGroup = new Set(presets.map((p) => p.id));
+  const head: PantryPreset[] = [];
+  for (const id of topIds) {
+    if (!inGroup.has(id)) continue;
+    const p = presets.find((x) => x.id === id);
+    if (p) head.push(p);
+  }
+  const headIds = new Set(head.map((p) => p.id));
+  const tail = presets.filter((p) => !headIds.has(p.id));
+  return [...head, ...tail];
+}
+
 export function HomeScreen() {
   const router = useRouter();
   const { show } = useToast();
   const { tasteContext, refreshTaste } = useMesiTaste();
   const [stats, setStats] = useState<IngredientStat[]>([]);
-  const [intentDays, setIntentDays] = useState(0);
+  const [metaLoadError, setMetaLoadError] = useState<string | null>(null);
 
   const [dinerPreset, setDinerPreset] = useState<"1" | "2" | "3" | "other">("1");
   const [dinerOther, setDinerOther] = useState("4");
@@ -100,7 +120,7 @@ export function HomeScreen() {
   const [customInput, setCustomInput] = useState("");
 
   const [loadingMenu, setLoadingMenu] = useState(false);
-  const [loadingQuick, setLoadingQuick] = useState(false);
+  const [loadingRandom, setLoadingRandom] = useState(false);
   const [loadingPrep, setLoadingPrep] = useState(false);
 
   const [ratingDoc, setRatingDoc] = useState<MealDocWithId | null>(null);
@@ -108,16 +128,16 @@ export function HomeScreen() {
   const [mealPrepMode, setMealPrepMode] = useState(false);
   const [prepDayCount, setPrepDayCount] = useState(3);
 
-  /** Blocking API errors — toast chỉ cho validation ngắn, không trùng banner. */
   const [apiError, setApiError] = useState<string | null>(null);
 
   const refreshMeta = useCallback(async () => {
+    setMetaLoadError(null);
     try {
-      const [s, c] = await Promise.all([listIngredientStats(), countDistinctIntentDays()]);
+      const s = await listIngredientStats();
       setStats(s);
-      setIntentDays(c);
     } catch (e) {
       console.error(e);
+      setMetaLoadError(getUserFriendlyFirestoreMessage(e));
     }
   }, []);
 
@@ -125,12 +145,12 @@ export function HomeScreen() {
     let cancelled = false;
     void (async () => {
       try {
-        const [s, c] = await Promise.all([listIngredientStats(), countDistinctIntentDays()]);
+        const s = await listIngredientStats();
         if (cancelled) return;
         setStats(s);
-        setIntentDays(c);
       } catch (e) {
         console.error(e);
+        if (!cancelled) setMetaLoadError(getUserFriendlyFirestoreMessage(e));
       }
     })();
     return () => {
@@ -181,7 +201,13 @@ export function HomeScreen() {
   }, []);
 
   const topIds = useMemo(() => topIngredientIds(stats, 5), [stats]);
-  const topIdSet = useMemo(() => new Set(topIds), [topIds]);
+
+  const proteinRows = useMemo(
+    () => orderPresetsByTopIds(PROTEIN_PRESETS, topIds),
+    [topIds],
+  );
+  const vegRows = useMemo(() => orderPresetsByTopIds(VEG_PRESETS, topIds), [topIds]);
+  const carbRows = useMemo(() => orderPresetsByTopIds(CARB_PRESETS, topIds), [topIds]);
 
   const effectiveDiners = useMemo(() => {
     if (dinerPreset === "other") {
@@ -244,16 +270,15 @@ export function HomeScreen() {
     });
   };
 
-  const runSuggestFlow = async (fromQuick: boolean) => {
-    const enabled = (Object.keys(MEAL_LABELS) as MealSlot[]).some((s) => mealOn[s]);
+  const runSuggestFlow = async () => {
+    const enabled = SLOTS.some((s) => mealOn[s]);
     if (!enabled) {
       show("Chọn ít nhất một buổi để lên thực đơn.", "error");
       return;
     }
 
     setApiError(null);
-    if (fromQuick) setLoadingQuick(true);
-    else setLoadingMenu(true);
+    setLoadingMenu(true);
     try {
       const profile = (await getHealthProfile()) ?? getDefaultHealthProfile();
       const body = buildSuggestMealsRequest({
@@ -284,18 +309,77 @@ export function HomeScreen() {
       });
       await recordPlanIntentForToday();
       await refreshMeta();
-      show(fromQuick ? "Đang mở gợi ý…" : "Đang mở gợi ý…", "info");
+      show("Đang mở gợi ý…", "info");
       router.push("/plan");
     } catch (e) {
       setApiError(e instanceof Error ? e.message : "Không gọi được API.");
     } finally {
       setLoadingMenu(false);
-      setLoadingQuick(false);
+    }
+  };
+
+  const runRandomPlan = async () => {
+    setApiError(null);
+    setLoadingRandom(true);
+    try {
+      const profile = (await getHealthProfile()) ?? getDefaultHealthProfile();
+
+      let ingredientLabels = stats
+        .slice(0, 8)
+        .map((r) => r.label.trim())
+        .filter(Boolean);
+
+      if (ingredientLabels.length === 0) {
+        ingredientLabels = RANDOM_FALLBACK_IDS.map((id) => getPantryPreset(id)?.label).filter(
+          (x): x is string => Boolean(x),
+        );
+      }
+
+      const anyMeal = SLOTS.some((s) => mealOn[s]);
+      const mealOnRandom: Record<MealSlot, boolean> = anyMeal
+        ? { ...mealOn }
+        : { morning: true, afternoon: true, evening: true };
+
+      const body = buildSuggestMealsRequest({
+        profile,
+        servings: 1,
+        mealOn: mealOnRandom,
+        effort: ALL_QUICK_EFFORT,
+        selectedIngredientLabels: [],
+        ingredientLabelsOverride: ingredientLabels,
+        tasteContext,
+      });
+
+      const res = await apiFetch("/api/ai/suggest-meals", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; data?: SuggestMealsParsed };
+
+      if (!res.ok || !json.ok || !json.data) {
+        setApiError(json.error ?? `Lỗi ${res.status}`);
+        return;
+      }
+
+      writePlanDraft({
+        version: 1,
+        suggestResult: json.data,
+        suggestRequest: body,
+        profileSnapshot: profile,
+      });
+      await recordPlanIntentForToday();
+      await refreshMeta();
+      show("Đang mở gợi ý…", "info");
+      router.push("/plan");
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : "Không gọi được API.");
+    } finally {
+      setLoadingRandom(false);
     }
   };
 
   const runMealPrepFlow = async () => {
-    const enabled = (Object.keys(MEAL_LABELS) as MealSlot[]).some((s) => mealOn[s]);
+    const enabled = SLOTS.some((s) => mealOn[s]);
     if (!enabled) {
       show("Chọn ít nhất một buổi để lên meal prep.", "error");
       return;
@@ -371,7 +455,7 @@ export function HomeScreen() {
     }
   };
 
-  const renderChip = (p: PantryPreset, isFrequent: boolean) => {
+  const renderChip = (p: PantryPreset) => {
     const on = selectedPantry.has(p.id);
     return (
       <button
@@ -379,50 +463,22 @@ export function HomeScreen() {
         type="button"
         onClick={() => togglePantry(p.id, p.label)}
         className={cn(
-          "relative min-h-11 rounded-full border px-3 py-2 text-left text-sm transition-colors",
+          "min-h-11 rounded-full border px-3 py-2 text-left text-sm transition-colors",
           on
             ? "border-primary bg-primary text-primary-foreground"
             : "border-border bg-card text-foreground hover:bg-muted",
-          isFrequent && !on && "border-primary/50 ring-1 ring-primary/30",
         )}
       >
-        {isFrequent ? (
-          <span className="bg-primary/15 text-primary absolute -top-1.5 -right-1 rounded px-1 text-[10px] font-medium">
-            Hay dùng
-          </span>
-        ) : null}
         {p.label}
       </button>
     );
   };
 
-  const orderedPresets = useMemo(() => {
-    const frequent: PantryPreset[] = [];
-    const byId = new Map(ALL_PANTRY_PRESETS.map((p) => [p.id, p]));
-    for (const id of topIds) {
-      const p = byId.get(id);
-      if (p) frequent.push(p);
-    }
-    const frequentIdSet = new Set(frequent.map((p) => p.id));
-    return { frequent, frequentIdSet };
-  }, [topIds]);
-
-  const proteinRows = useMemo(
-    () => PROTEIN_PRESETS.filter((p) => !orderedPresets.frequentIdSet.has(p.id)),
-    [orderedPresets.frequentIdSet],
-  );
-  const vegRows = useMemo(
-    () => VEG_PRESETS.filter((p) => !orderedPresets.frequentIdSet.has(p.id)),
-    [orderedPresets.frequentIdSet],
-  );
-  const carbRows = useMemo(
-    () => CARB_PRESETS.filter((p) => !orderedPresets.frequentIdSet.has(p.id)),
-    [orderedPresets.frequentIdSet],
-  );
+  const ctaBusy = loadingMenu || loadingRandom || loadingPrep;
 
   return (
-    <div className="bg-background min-h-0 flex-1">
-      <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex items-center justify-between border-b px-4 py-3 backdrop-blur">
+    <div className="bg-background flex min-h-0 flex-1 flex-col">
+      <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
         <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
         <div className="flex items-center gap-1">
           <Link
@@ -443,249 +499,261 @@ export function HomeScreen() {
       </header>
 
       <div
-        className="mx-auto w-full max-w-[430px] space-y-6 scroll-pb-32 px-4 py-4 pb-28"
+        className="mx-auto min-h-0 w-full max-w-[430px] flex-1 overflow-y-auto px-4 py-4 pb-28"
         style={{ scrollPaddingBottom: "max(7rem, env(safe-area-inset-bottom))" }}
       >
-        {apiError ? (
-          <Alert variant="destructive" className="relative pr-10">
-            <AlertTitle>Không tạo được gợi ý</AlertTitle>
-            <AlertDescription className="text-destructive/90">{apiError}</AlertDescription>
-            <button
-              type="button"
-              className="text-destructive ring-offset-background focus:ring-ring absolute top-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
-              onClick={() => setApiError(null)}
-              aria-label="Đóng"
-            >
-              ×
-            </button>
-          </Alert>
-        ) : null}
-        <RatingPromptBanner
-          doc={ratingDoc}
-          busy={ratingBusy}
-          onRate={(r) => void onRateMeal(r)}
-          onSkip={() => void onSkipRating()}
-        />
-
-        {intentDays >= 3 ? (
-          <div>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 w-full"
-              disabled={loadingQuick || mealPrepMode}
-              onClick={() => void runSuggestFlow(true)}
-            >
-              {loadingQuick ? "Đang chuẩn bị…" : "Plan nhanh"}
-            </Button>
-            <p className="text-muted-foreground mt-1.5 text-center text-xs">
-              Gợi ý nhanh cùng backend Gemini
-            </p>
-            {mealPrepMode ? (
-              <p className="text-muted-foreground mt-1 text-center text-xs">Tắt Meal prep để dùng Plan nhanh.</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <section className="space-y-3">
-          <label className="border-border flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
-            <div>
-              <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
-              <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={mealPrepMode}
-              onChange={() => setMealPrepMode((x) => !x)}
-              className="border-input size-5 rounded"
-              aria-label="Bật meal prep"
-            />
-          </label>
-          {mealPrepMode ? (
-            <div className="space-y-1">
-              <p className="text-muted-foreground text-xs font-medium">Số ngày liên tiếp (2–7)</p>
-              <Input
-                type="number"
-                min={2}
-                max={7}
-                className="min-h-11 max-w-[8rem] text-base"
-                value={prepDayCount}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10);
-                  if (!Number.isFinite(n)) {
-                    setPrepDayCount(2);
-                    return;
-                  }
-                  setPrepDayCount(Math.max(2, Math.min(7, n)));
-                }}
-                aria-label="Số ngày meal prep"
-              />
-            </div>
+        <div className="space-y-6">
+          {metaLoadError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Không tải được dữ liệu</AlertTitle>
+              <AlertDescription className="flex flex-col gap-2">
+                <span>{metaLoadError}</span>
+                <Button type="button" variant="secondary" size="sm" className="w-fit" onClick={() => void refreshMeta()}>
+                  Thử lại
+                </Button>
+              </AlertDescription>
+            </Alert>
           ) : null}
-        </section>
 
-        <section className="space-y-2">
-          <h2 className="text-foreground text-sm font-medium">Số người ăn</h2>
-          <div className="flex flex-wrap gap-2">
-            {(["1", "2", "3"] as const).map((n) => (
+          {apiError ? (
+            <Alert variant="destructive" className="relative pr-10">
+              <AlertTitle>Không tạo được gợi ý</AlertTitle>
+              <AlertDescription className="text-destructive/90">{apiError}</AlertDescription>
               <button
-                key={n}
                 type="button"
-                onClick={() => setDinerPreset(n)}
+                className="text-destructive ring-offset-background focus:ring-ring absolute top-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+                onClick={() => setApiError(null)}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </Alert>
+          ) : null}
+          <RatingPromptBanner
+            doc={ratingDoc}
+            busy={ratingBusy}
+            onRate={(r) => void onRateMeal(r)}
+            onSkip={() => void onSkipRating()}
+          />
+
+          <section className="space-y-3">
+            <label className="border-border flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
+              <div>
+                <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
+                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={mealPrepMode}
+                onChange={() => setMealPrepMode((x) => !x)}
+                className="border-input size-5 rounded"
+                aria-label="Bật meal prep"
+              />
+            </label>
+            {mealPrepMode ? (
+              <div className="space-y-1">
+                <p className="text-muted-foreground text-xs font-medium">Số ngày liên tiếp (2–7)</p>
+                <Input
+                  type="number"
+                  min={2}
+                  max={7}
+                  className="min-h-11 max-w-[8rem] text-base"
+                  value={prepDayCount}
+                  onChange={(e) => {
+                    const n = Number.parseInt(e.target.value, 10);
+                    if (!Number.isFinite(n)) {
+                      setPrepDayCount(2);
+                      return;
+                    }
+                    setPrepDayCount(Math.max(2, Math.min(7, n)));
+                  }}
+                  aria-label="Số ngày meal prep"
+                />
+              </div>
+            ) : null}
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-foreground text-sm font-medium">Số người ăn</h2>
+            <div className="flex flex-wrap gap-2">
+              {(["1", "2", "3"] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setDinerPreset(n)}
+                  className={cn(
+                    "min-h-11 min-w-[3.5rem] rounded-xl border px-3 text-sm font-medium",
+                    dinerPreset === n
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card",
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setDinerPreset("other")}
                 className={cn(
-                  "min-h-11 min-w-[3.5rem] rounded-xl border px-3 text-sm font-medium",
-                  dinerPreset === n
+                  "min-h-11 rounded-xl border px-3 text-sm font-medium",
+                  dinerPreset === "other"
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card",
                 )}
               >
-                {n}
+                Khác
               </button>
+            </div>
+            {dinerPreset === "other" ? (
+              <Input
+                type="number"
+                min={1}
+                max={99}
+                className="min-h-11 max-w-[8rem] text-base"
+                value={dinerOther}
+                onChange={(e) => setDinerOther(e.target.value)}
+                aria-label="Số người (nhập tay)"
+              />
+            ) : null}
+            <p className="text-muted-foreground mt-1 text-xs tabular-nums" aria-live="polite">
+              Tổng: {effectiveDiners} người ăn
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-foreground text-sm font-medium">Lên plan cho buổi nào?</h2>
+            {SLOTS.map((slot) => (
+              <div key={slot} className="border-border rounded-xl border p-3">
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={mealOn[slot]}
+                    onChange={() => toggleMeal(slot)}
+                    className="border-input size-5 rounded"
+                  />
+                  <span className="text-foreground font-medium">{MEAL_LABELS[slot]}</span>
+                </label>
+                {mealOn[slot] ? (
+                  <div className="mt-2 flex min-h-11 items-center gap-2">
+                    <span className="shrink-0 text-base select-none" aria-hidden>
+                      {SLOT_EMOJI[slot]}
+                    </span>
+                    <select
+                      value={effort[slot]}
+                      onChange={(e) => setEffortFor(slot, e.target.value as Effort)}
+                      aria-label={`Mức nấu ${MEAL_LABELS[slot]}`}
+                      className="border-input bg-background text-foreground focus-visible:ring-ring flex h-11 min-h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+                    >
+                      {EFFORT_OPTIONS.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {EFFORT_SELECT_LABEL[o.id]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
             ))}
-            <button
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-foreground text-sm font-medium">Nhà đang có gì?</h2>
+
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-xs font-medium">Protein</p>
+              <div className="flex flex-wrap gap-2">{proteinRows.map((p) => renderChip(p))}</div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-xs font-medium">Rau / củ</p>
+              <div className="flex flex-wrap gap-2">{vegRows.map((p) => renderChip(p))}</div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-xs font-medium">Tinh bột</p>
+              <div className="flex flex-wrap gap-2">{carbRows.map((p) => renderChip(p))}</div>
+            </div>
+
+            {customTags.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {customTags.map((c) => {
+                  const on = selectedPantry.has(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggleCustomTag(c.id, c.label)}
+                      className={cn(
+                        "min-h-11 rounded-full border px-3 py-2 text-sm",
+                        on
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card",
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="flex gap-2">
+              <Input
+                placeholder="Thêm nguyên liệu khác…"
+                value={customInput}
+                onChange={(e) => setCustomInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomPantry();
+                  }
+                }}
+                className="min-h-11 flex-1 text-base"
+              />
+              <Button type="button" variant="secondary" className="min-h-11 shrink-0" onClick={addCustomPantry}>
+                Thêm
+              </Button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "border-border bg-background/95 supports-[backdrop-filter]:bg-background/85 mx-auto w-full max-w-[430px] border-t px-4 pt-3 pb-2 backdrop-blur-sm",
+          "max-md:fixed max-md:right-0 max-md:left-0 max-md:z-40 max-md:bottom-[var(--bottom-nav-height,4rem)]",
+          "md:relative md:z-10 md:shrink-0",
+        )}
+      >
+        <div className="flex gap-3">
+          {!mealPrepMode ? (
+            <Button
               type="button"
-              onClick={() => setDinerPreset("other")}
-              className={cn(
-                "min-h-11 rounded-xl border px-3 text-sm font-medium",
-                dinerPreset === "other"
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card",
-              )}
+              variant="outline"
+              className="min-h-12 min-w-0 flex-1 gap-2 text-base"
+              disabled={ctaBusy}
+              onClick={() => void runRandomPlan()}
             >
-              Khác
-            </button>
-          </div>
-          {dinerPreset === "other" ? (
-            <Input
-              type="number"
-              min={1}
-              max={99}
-              className="min-h-11 max-w-[8rem] text-base"
-              value={dinerOther}
-              onChange={(e) => setDinerOther(e.target.value)}
-              aria-label="Số người (nhập tay)"
-            />
-          ) : null}
-          <p className="text-muted-foreground mt-1 text-xs tabular-nums" aria-live="polite">
-            Tổng: {effectiveDiners} người ăn
-          </p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-foreground text-sm font-medium">Lên plan cho buổi nào?</h2>
-          {(Object.keys(MEAL_LABELS) as MealSlot[]).map((slot) => (
-            <div key={slot} className="border-border rounded-xl border p-3">
-              <label className="flex cursor-pointer items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={mealOn[slot]}
-                  onChange={() => toggleMeal(slot)}
-                  className="border-input size-5 rounded"
-                />
-                <span className="text-foreground font-medium">{MEAL_LABELS[slot]}</span>
-              </label>
-              {mealOn[slot] ? (
-                <div className="mt-2 flex min-h-11 items-center gap-2">
-                  <span className="shrink-0 text-base select-none" aria-hidden>
-                    {SLOT_EMOJI[slot]}
-                  </span>
-                  <select
-                    value={effort[slot]}
-                    onChange={(e) => setEffortFor(slot, e.target.value as Effort)}
-                    aria-label={`Mức nấu ${MEAL_LABELS[slot]}`}
-                    className="border-input bg-background text-foreground focus-visible:ring-ring flex h-11 min-h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
-                  >
-                    {EFFORT_OPTIONS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {EFFORT_SELECT_LABEL[o.id]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-foreground text-sm font-medium">Nhà đang có gì?</h2>
-
-          {orderedPresets.frequent.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-muted-foreground text-xs font-medium">Lần trước bạn có…</p>
-              <div className="flex flex-wrap gap-2">{orderedPresets.frequent.map((p) => renderChip(p, true))}</div>
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <p className="text-muted-foreground text-xs font-medium">Protein</p>
-            <div className="flex flex-wrap gap-2">{proteinRows.map((p) => renderChip(p, topIdSet.has(p.id)))}</div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-muted-foreground text-xs font-medium">Rau / củ</p>
-            <div className="flex flex-wrap gap-2">{vegRows.map((p) => renderChip(p, topIdSet.has(p.id)))}</div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-muted-foreground text-xs font-medium">Tinh bột</p>
-            <div className="flex flex-wrap gap-2">{carbRows.map((p) => renderChip(p, topIdSet.has(p.id)))}</div>
-          </div>
-
-          {customTags.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {customTags.map((c) => {
-                const on = selectedPantry.has(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => toggleCustomTag(c.id, c.label)}
-                    className={cn(
-                      "min-h-11 rounded-full border px-3 py-2 text-sm",
-                      on
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card",
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <div className="flex gap-2">
-            <Input
-              placeholder="Thêm nguyên liệu khác…"
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addCustomPantry();
-                }
-              }}
-              className="min-h-11 flex-1 text-base"
-            />
-            <Button type="button" variant="secondary" className="min-h-11 shrink-0" onClick={addCustomPantry}>
-              Thêm
+              <Shuffle className="size-4 shrink-0" aria-hidden />
+              {loadingRandom ? "Đang chọn ngẫu nhiên…" : "Random cho tôi"}
             </Button>
-          </div>
-        </section>
-
-        <Button
-          type="button"
-          className="min-h-12 w-full text-base font-semibold"
-          disabled={loadingMenu || loadingPrep}
-          onClick={() => void (mealPrepMode ? runMealPrepFlow() : runSuggestFlow(false))}
-        >
-          {loadingPrep
-            ? "Đang lập meal prep…"
-            : loadingMenu
-              ? "Đang nghĩ món…"
-              : mealPrepMode
-                ? "Lên meal prep"
-                : "Lên thực đơn"}
-        </Button>
+          ) : null}
+          <Button
+            type="button"
+            className={cn(
+              "min-h-12 text-base font-semibold",
+              mealPrepMode ? "w-full" : "min-w-0 flex-[2]",
+            )}
+            disabled={ctaBusy}
+            onClick={() => void (mealPrepMode ? runMealPrepFlow() : runSuggestFlow())}
+          >
+            {loadingPrep
+              ? "Đang lập meal prep…"
+              : loadingMenu
+                ? "Đang nghĩ món…"
+                : mealPrepMode
+                  ? "Lên meal prep"
+                  : "Lên thực đơn"}
+          </Button>
+        </div>
       </div>
     </div>
   );

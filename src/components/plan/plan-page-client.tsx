@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api/api-fetch";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import type { MealOption, RecipeDetailParsed, SuggestMealsParsed } from "@/lib/ai/validators/meals";
+import { getSupplementTimingHint } from "@/lib/constants/health-presets";
 import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
 import {
   aggregateFromMeals,
@@ -51,7 +52,10 @@ function supplementReminder(draft: PlanDraftV1): string {
   if (hint) return hint;
   const p = draft.profileSnapshot;
   return p.supplements
-    .map((s) => `${s.label}${s.userTime ? ` (${s.userTime})` : ` — ${s.suggestedTime}`}`)
+    .map((s) => {
+      const hint = getSupplementTimingHint(s.id);
+      return hint ? `${s.label} — ${hint}` : s.label;
+    })
     .join(" • ");
 }
 

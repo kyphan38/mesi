@@ -20,15 +20,28 @@ export const NUTRITION_GOALS: NutritionGoalPreset[] = [
   { id: "maintain_weight", label: "Duy trì cân nặng" },
 ];
 
-export type SupplementPreset = { id: string; label: string; suggestedTime: string };
+export type SupplementPreset = { id: string; label: string };
 
 export const SUPPLEMENT_PRESETS: SupplementPreset[] = [
-  { id: "fish_oil", label: "Dầu cá (Omega-3)", suggestedTime: "Sau bữa sáng" },
-  { id: "vitamin_c", label: "Vitamin C", suggestedTime: "Sau bữa trưa" },
-  { id: "vitamin_d", label: "Vitamin D", suggestedTime: "Sau bữa sáng" },
-  { id: "zinc", label: "Kẽm (Zinc)", suggestedTime: "Sau bữa tối" },
-  { id: "probiotic", label: "Probiotic", suggestedTime: "Trước khi ngủ" },
+  { id: "fish_oil", label: "Dầu cá (Omega-3)" },
+  { id: "vitamin_c", label: "Vitamin C" },
+  { id: "vitamin_d", label: "Vitamin D" },
+  { id: "zinc", label: "Kẽm (Zinc)" },
+  { id: "probiotic", label: "Probiotic" },
 ];
+
+/** Shown on plan + AI context — not user-editable in profile (chips only). */
+const SUPPLEMENT_TIMING_BY_ID: Record<string, string> = {
+  fish_oil: "Uống sau bữa có chất béo (sáng hoặc trưa)",
+  vitamin_c: "Uống giữa buổi sáng hoặc sau bữa trưa",
+  vitamin_d: "Uống sau bữa có chất béo",
+  zinc: "Uống trước bữa tối 30 phút hoặc trước ngủ",
+  probiotic: "Uống lúc bụng đói, sáng sớm trước bữa",
+};
+
+export function getSupplementTimingHint(supplementId: string): string | undefined {
+  return SUPPLEMENT_TIMING_BY_ID[supplementId];
+}
 
 const avoidMap = new Map(AVOID_FOOD_PRESETS.map((p) => [p.id, p.label]));
 const goalMap = new Map(NUTRITION_GOALS.map((p) => [p.id, p.label]));

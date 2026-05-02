@@ -21,6 +21,7 @@ import { aggregateFromMeals, sumDayTotals } from "@/lib/plan/day-insulin";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
+import { getSupplementTimingHint } from "@/lib/constants/health-presets";
 import { primaryNutritionGoalKey } from "@/lib/meal-plan/nutrition-baseline";
 
 const KIND_VI: Record<string, string> = {
@@ -34,7 +35,10 @@ function supplementReminderFromDraft(draft: MealPrepPlanDraftV1): string {
   if (hint) return hint;
   const p = draft.profileSnapshot;
   return p.supplements
-    .map((s) => `${s.label}${s.userTime ? ` (${s.userTime})` : ` — ${s.suggestedTime}`}`)
+    .map((s) => {
+      const hint = getSupplementTimingHint(s.id);
+      return hint ? `${s.label} — ${hint}` : s.label;
+    })
     .join(" • ");
 }
 

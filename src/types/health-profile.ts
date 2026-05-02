@@ -4,11 +4,6 @@ export const PROFILE_COLLECTION = "profile" as const;
 export interface SupplementEntry {
   id: string;
   label: string;
-  suggestedTime: string;
-  /** User override for intake time hint */
-  userTime?: string;
-  /** Free-text dosing (e.g. "2 viên/ngày, mỗi viên 500mg") */
-  dosageNote?: string;
 }
 
 export interface HealthProfileDoc {

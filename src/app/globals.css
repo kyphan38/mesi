@@ -49,6 +49,8 @@
 }
 
 :root {
+  /** Reserve space for fixed bottom nav (see MobileMainNav); do not double-count safe-area on nested fixed CTAs */
+  --bottom-nav-height: 4rem;
   --background: oklch(0.985 0.004 85);
   --foreground: oklch(0.22 0.012 75);
   --card: oklch(1 0.002 85);

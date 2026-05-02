@@ -38,6 +38,8 @@ export type BuildSuggestInput = {
   effort: Record<HomeMealSlot, HomeEffort>;
   /** Selected pantry ids → labels resolved via presets + custom map */
   selectedIngredientLabels: string[];
+  /** When set (e.g. Random flow), overrides selectedIngredientLabels for the API payload */
+  ingredientLabelsOverride?: string[];
   tasteContext?: TasteContext;
 };
 
@@ -56,7 +58,15 @@ export function buildHealthProfilePayload(profile: HealthProfileDoc): SuggestMea
 }
 
 export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMealsRequest {
-  const { profile, servings, mealOn, effort, selectedIngredientLabels, tasteContext } = input;
+  const {
+    profile,
+    servings,
+    mealOn,
+    effort,
+    selectedIngredientLabels,
+    ingredientLabelsOverride,
+    tasteContext,
+  } = input;
 
   const meals: { time: ApiMealTime; effort: MealEffort }[] = [];
   const slots: HomeMealSlot[] = ["morning", "afternoon", "evening"];
@@ -69,9 +79,14 @@ export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMeals
     }
   }
 
+  const ingredientLines =
+    ingredientLabelsOverride !== undefined
+      ? ingredientLabelsOverride
+      : selectedIngredientLabels;
+
   return {
     ingredients:
-      selectedIngredientLabels.length > 0 ? selectedIngredientLabels : ["(chưa chọn — gợi ý món linh hoạt)"],
+      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn — gợi ý món linh hoạt)"],
     meals,
     servings: Math.max(1, Math.min(99, servings)),
     health_profile: buildHealthProfilePayload(profile),
