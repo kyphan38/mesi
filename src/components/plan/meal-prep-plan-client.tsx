@@ -13,6 +13,7 @@ import { addDaysToLocalDateKey, localDateKey } from "@/lib/db/plan-intents";
 import {
   buildConfirmedPlanPayload,
   incrementIngredientsFromMeals,
+  listDateKeysWithNonMealPrepPlan,
   saveConfirmedPlan,
 } from "@/lib/db/meals";
 import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
@@ -111,6 +112,26 @@ function MealPrepSummary({
   const confirmAll = async () => {
     setSaving(true);
     try {
+      const keysToCheck: string[] = [];
+      for (let day = 1; day <= prepN; day++) {
+        const rowsEarly = byDay.get(day);
+        if (!rowsEarly?.length) continue;
+        keysToCheck.push(addDaysToLocalDateKey(startKey, day - 1));
+      }
+      const conflictingKeys = await listDateKeysWithNonMealPrepPlan(keysToCheck);
+      if (conflictingKeys.length > 0) {
+        const dates = conflictingKeys.map(formatDateKeyVi).join(", ");
+        const ok =
+          typeof window !== "undefined" &&
+          window.confirm(
+            `Một số ngày đã có thực đơn (${dates}). Meal prep sẽ thay thế plan hiện tại. Tiếp tục?`,
+          );
+        if (!ok) {
+          setSaving(false);
+          return;
+        }
+      }
+
       const batchId = createPrepBatchId();
       const prepInstructions = draft.suggestResult.prep_instructions.trim();
       const allMeals: MealOption[] = [];

@@ -33,10 +33,13 @@ import { getUserFriendlyFirestoreMessage } from "@/lib/db/firestore-errors";
 import { apiFetch } from "@/lib/api/api-fetch";
 import { getDefaultHealthProfile, getHealthProfile } from "@/lib/db/firestore";
 import {
+  apiTimeToUiSlot,
   buildSuggestMealPrepRequest,
   buildSuggestMealsRequest,
   labelsFromPantrySelection,
+  uiSlotToApiTime,
 } from "@/lib/meal-plan/build-suggest-request";
+import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import type { CookAgainPayloadV1 } from "@/lib/plan/cook-again";
 import { readCookAgainPayload } from "@/lib/plan/cook-again";
 import { getHomeComposeNewPlanActive, setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
@@ -161,6 +164,7 @@ export function HomeScreen() {
   const [todayPlanDoc, setTodayPlanDoc] = useState<MealDocWithId | null>(null);
   const [homeProfile, setHomeProfile] = useState<HealthProfileDoc | null>(null);
   const [formOverride, setFormOverride] = useState(false);
+  const [replanSlots, setReplanSlots] = useState<Set<MealSlot>>(() => new Set());
 
   const refreshTodayPlan = useCallback(async () => {
     try {
@@ -169,9 +173,15 @@ export function HomeScreen() {
       setTodayPlanDoc(t);
       const composing = getHomeComposeNewPlanActive();
       if (t != null) {
-        startTransition(() => setFormOverride(composing));
+        startTransition(() => {
+          setFormOverride(composing);
+          if (!composing) setReplanSlots(new Set());
+        });
       } else {
-        startTransition(() => setFormOverride(false));
+        startTransition(() => {
+          setFormOverride(false);
+          setReplanSlots(new Set());
+        });
       }
     } catch (e) {
       console.error(e);
@@ -223,6 +233,7 @@ export function HomeScreen() {
   const applyCookAgainPayload = useCallback((payload: CookAgainPayloadV1) => {
     setHomeComposeNewPlanActive(false);
     setFormOverride(true);
+    setReplanSlots(new Set());
     const n = payload.servings;
     if (n >= 1 && n <= 3) {
       setDinerPreset(String(n) as "1" | "2" | "3");
@@ -285,6 +296,15 @@ export function HomeScreen() {
 
   const flatCustomList = useMemo(() => flatCustomTags(customItems), [customItems]);
 
+  const plannedUiSlots = useMemo(() => {
+    if (!todayPlanDoc) return new Set<MealSlot>();
+    const s = new Set<MealSlot>();
+    for (const api of ["morning", "lunch", "dinner"] as ApiMealTime[]) {
+      if (todayPlanDoc.data.slots[api]?.meal) s.add(apiTimeToUiSlot(api));
+    }
+    return s;
+  }, [todayPlanDoc]);
+
   const addSheetCategoryLabel = useMemo(() => {
     if (!addSheetState.categoryId) return "";
     return PANTRY_CATEGORIES.find((c) => c.id === addSheetState.categoryId)?.label ?? "";
@@ -305,7 +325,13 @@ export function HomeScreen() {
   }, [addSheetState.categoryId, customItems]);
 
   const toggleMeal = (slot: MealSlot) => {
+    if (plannedUiSlots.has(slot) && !replanSlots.has(slot)) return;
     setMealOn((m) => ({ ...m, [slot]: !m[slot] }));
+  };
+
+  const enableReplan = (slot: MealSlot) => {
+    setReplanSlots((prev) => new Set(prev).add(slot));
+    setMealOn((prev) => ({ ...prev, [slot]: true }));
   };
 
   const setEffortFor = (slot: MealSlot, e: Effort) => {
@@ -689,7 +715,43 @@ export function HomeScreen() {
           plan={todayPlanDoc}
           healthProfile={homeProfile}
           onReplacedPlan={() => {
+            setHomeComposeNewPlanActive(true);
             setFormOverride(true);
+            setReplanSlots(new Set());
+            setMealOn(() => {
+              if (!todayPlanDoc) return { morning: true, afternoon: false, evening: false };
+              const planned = new Set<MealSlot>();
+              for (const api of ["morning", "lunch", "dinner"] as ApiMealTime[]) {
+                if (todayPlanDoc.data.slots[api]?.meal) planned.add(apiTimeToUiSlot(api));
+              }
+              if (planned.size === 0) return { morning: true, afternoon: false, evening: false };
+              const next: Record<MealSlot, boolean> = {
+                morning: false,
+                afternoon: false,
+                evening: false,
+              };
+              for (const s of SLOTS) {
+                if (!planned.has(s)) {
+                  next[s] = true;
+                  break;
+                }
+              }
+              return next;
+            });
+          }}
+          onPlanSlot={(api) => {
+            setHomeComposeNewPlanActive(true);
+            setFormOverride(true);
+            setReplanSlots(new Set());
+            const ui = apiTimeToUiSlot(api);
+            setMealOn({ morning: false, afternoon: false, evening: false, [ui]: true });
+          }}
+          onReplanSlot={(api) => {
+            setHomeComposeNewPlanActive(true);
+            setFormOverride(true);
+            const ui = apiTimeToUiSlot(api);
+            setReplanSlots((prev) => new Set(prev).add(ui));
+            setMealOn((prev) => ({ ...prev, [ui]: true }));
           }}
         />
       </div>
@@ -842,17 +904,50 @@ export function HomeScreen() {
 
           <section className="space-y-3">
             <h2 className="text-foreground mb-2 text-base font-medium">Lên plan cho buổi nào?</h2>
-            {SLOTS.map((slot) => (
+            {SLOTS.map((slot) => {
+              const isPlanned = plannedUiSlots.has(slot);
+              const canToggle = !isPlanned || replanSlots.has(slot);
+              const plannedName = todayPlanDoc?.data.slots[uiSlotToApiTime(slot)]?.meal.name;
+              return (
               <div key={slot} className="border-border rounded-xl border p-3">
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={mealOn[slot]}
-                    onChange={() => toggleMeal(slot)}
-                    className="border-input size-5 rounded"
-                  />
-                  <span className="text-foreground text-sm font-medium">{MEAL_LABELS[slot]}</span>
-                </label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label
+                    className={cn(
+                      "flex items-center gap-3",
+                      canToggle ? "cursor-pointer" : "cursor-default",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={mealOn[slot]}
+                      onChange={() => toggleMeal(slot)}
+                      disabled={!canToggle}
+                      className="border-input size-5 rounded disabled:opacity-50"
+                    />
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        isPlanned && !replanSlots.has(slot)
+                          ? "text-muted-foreground"
+                          : "text-foreground",
+                      )}
+                    >
+                      {SLOT_EMOJI[slot]} {MEAL_LABELS[slot]}
+                    </span>
+                  </label>
+                  {isPlanned && plannedName && !replanSlots.has(slot) ? (
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <span className="text-muted-foreground text-xs">✓ {plannedName}</span>
+                      <button
+                        type="button"
+                        onClick={() => enableReplan(slot)}
+                        className="text-primary text-xs font-medium hover:underline"
+                      >
+                        Plan lại
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {mealOn[slot] ? (
                   <div className="mt-2 flex min-h-11 items-center gap-2">
                     <span className="shrink-0 text-sm select-none" aria-hidden>
@@ -873,7 +968,8 @@ export function HomeScreen() {
                   </div>
                 ) : null}
               </div>
-            ))}
+            );
+            })}
           </section>
 
           <section className="space-y-4">

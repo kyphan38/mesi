@@ -14,6 +14,8 @@ import type { MealDocWithId } from "@/lib/db/meals";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import type { HealthProfileDoc } from "@/types/health-profile";
 
+const ALL_API_SLOTS: ApiMealTime[] = ["morning", "lunch", "dinner"];
+
 function randomFunFactFromPlan(doc: MealDocWithId["data"]): string {
   const facts: string[] = [];
   for (const slot of Object.keys(doc.slots) as ApiMealTime[]) {
@@ -28,15 +30,19 @@ export function TodayPlanView({
   plan,
   healthProfile,
   onReplacedPlan,
+  onPlanSlot,
+  onReplanSlot,
 }: {
   plan: MealDocWithId;
   healthProfile: HealthProfileDoc;
   onReplacedPlan: () => void;
+  onPlanSlot: (slot: ApiMealTime) => void;
+  onReplanSlot: (slot: ApiMealTime) => void;
 }) {
   const d = plan.data;
 
-  const apiSlots = useMemo(
-    () => Object.keys(d.slots).filter((k) => d.slots[k as ApiMealTime]) as ApiMealTime[],
+  const hasFullDay = useMemo(
+    () => ALL_API_SLOTS.every((t) => d.slots[t]?.meal != null),
     [d.slots],
   );
 
@@ -46,7 +52,7 @@ export function TodayPlanView({
   );
 
   const funFact = useMemo(() => randomFunFactFromPlan(d), [d]);
-  const macroMode = apiSlots.length >= 3 ? "fullDayTargets" : "totalsOnly";
+  const macroMode = hasFullDay ? "fullDayTargets" : "totalsOnly";
 
   const startNewPlan = () => {
     setHomeComposeNewPlanActive(true);
@@ -77,31 +83,59 @@ export function TodayPlanView({
           </CardContent>
         </Card>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-foreground text-base font-medium">Các bữa</p>
-          {apiSlots.map((slot) => {
+          {ALL_API_SLOTS.map((slot) => {
             const entry = d.slots[slot];
-            if (!entry?.meal) return null;
-            return (
-              <Link
-                key={slot}
-                href={`/history/${plan.id}`}
-                className="border-border hover:bg-muted/50 block rounded-lg border p-4 text-left text-sm"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                      {API_SLOT_VI[slot]}
-                    </p>
-                    <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
-                    <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
-                      ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
-                      {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
-                    </p>
+            if (entry?.meal) {
+              return (
+                <div key={slot} className="border-border rounded-lg border">
+                  <Link
+                    href={`/history/${plan.id}`}
+                    className="border-border hover:bg-muted/50 block p-4 text-left text-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                          {API_SLOT_VI[slot]}
+                        </p>
+                        <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
+                        <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
+                          ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
+                          {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
+                        </p>
+                      </div>
+                      <InsulinSpikeBadge value={entry.meal.insulin_spike} />
+                    </div>
+                  </Link>
+                  <div className="border-border flex justify-end border-t px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => onReplanSlot(slot)}
+                      className="text-muted-foreground hover:text-primary text-xs font-medium"
+                    >
+                      Plan lại
+                    </button>
                   </div>
-                  <InsulinSpikeBadge value={entry.meal.insulin_spike} />
                 </div>
-              </Link>
+              );
+            }
+            return (
+              <div
+                key={slot}
+                className="border-border rounded-lg border border-dashed p-4 text-center"
+              >
+                <p className="text-muted-foreground text-sm">
+                  {API_SLOT_VI[slot]} — chưa có plan
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onPlanSlot(slot)}
+                  className="text-primary mt-2 text-sm font-medium hover:underline"
+                >
+                  Lên plan cho {API_SLOT_VI[slot].toLowerCase()}
+                </button>
+              </div>
             );
           })}
         </div>
