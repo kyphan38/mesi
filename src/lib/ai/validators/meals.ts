@@ -88,6 +88,8 @@ export const mealOptionSchema = z.object({
   cooking_method: z.string().min(1),
   missing_ingredients: z.array(z.string()),
   fun_fact: z.string().min(1),
+  /** Micro-copy: one-line why this option fits (legacy saves may omit). */
+  pick_reason: z.string().max(120).optional(),
 });
 
 export type MealOption = z.infer<typeof mealOptionSchema>;

@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import type { MealOption } from "@/lib/ai/validators/meals";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
+import { insulinSpikeAbbrev } from "@/lib/plan/day-insulin";
 
 export function MealOptionCard({
   option,
@@ -15,6 +15,9 @@ export function MealOptionCard({
   onSelect: () => void;
   compact?: boolean;
 }) {
+  const missingText = option.missing_ingredients.join(", ");
+  const pickReason = option.pick_reason?.trim();
+  const iShort = insulinSpikeAbbrev(option.insulin_spike);
   return (
     <button
       type="button"
@@ -24,10 +27,12 @@ export function MealOptionCard({
       <Card
         className={cn(
           "transition-colors",
-          selected ? "border-primary ring-primary ring-2" : "hover:bg-muted/40",
+          selected
+            ? "border-primary bg-primary/5 ring-primary ring-2 dark:bg-primary/10"
+            : "hover:bg-muted/40",
         )}
       >
-        <div className="space-y-2 p-3">
+        <div className="space-y-1.5 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-1 items-start gap-2">
               <span
@@ -39,22 +44,18 @@ export function MealOptionCard({
                 {selected ? <Check className="size-3.5" /> : null}
               </span>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-                  <span className="text-foreground font-semibold">{option.name}</span>
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    ~{Math.round(option.calories)} kcal
-                  </span>
-                </div>
-                <p className="text-muted-foreground mt-1 text-xs leading-snug">{option.description}</p>
+                <span className="text-foreground block font-semibold">{option.name}</span>
+                {pickReason ? (
+                  <p className="text-muted-foreground mt-0.5 text-sm leading-snug line-clamp-1" title={pickReason}>
+                    {pickReason}
+                  </p>
+                ) : null}
+                <p className="text-muted-foreground mt-0.5 text-sm tabular-nums">
+                  ~{Math.round(option.calories)} kcal · P {Math.round(option.macros.protein_g)}g · C{" "}
+                  {Math.round(option.macros.carb_g)}g · F {Math.round(option.macros.fat_g)}g · I {iShort}
+                </p>
               </div>
             </div>
-            <InsulinSpikeBadge value={option.insulin_spike} />
-          </div>
-
-          <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums">
-            <span>P {Math.round(option.macros.protein_g)}g</span>
-            <span>C {Math.round(option.macros.carb_g)}g</span>
-            <span>F {Math.round(option.macros.fat_g)}g</span>
           </div>
 
           <p className="text-muted-foreground text-xs">
@@ -62,8 +63,8 @@ export function MealOptionCard({
           </p>
 
           {option.missing_ingredients.length > 0 ? (
-            <p className="text-muted-foreground text-xs">
-              Cần thêm: {option.missing_ingredients.join(", ")}
+            <p className="text-muted-foreground line-clamp-1 text-xs" title={missingText}>
+              Cần thêm: {missingText}
             </p>
           ) : null}
         </div>

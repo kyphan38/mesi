@@ -8,6 +8,7 @@ import {
   mealTimesFromRequest,
 } from "@/lib/ai/prompts/mesi-meals";
 import type { SuggestMealsRequest } from "@/lib/ai/types/meal-api";
+import { healthProfileApiSchema } from "@/lib/ai/validators/health-profile-api";
 import { parseSuggestMealsJson } from "@/lib/ai/validators/meals";
 import { requireAuthenticatedRouteUser } from "@/lib/auth/server-route-auth";
 
@@ -24,11 +25,7 @@ const bodySchema = z.object({
     )
     .min(1),
   servings: z.number().int().min(1).max(99),
-  health_profile: z.object({
-    avoid: z.array(z.string()),
-    goal: z.enum(["clear_skin", "lose_weight", "gain_muscle", "maintain_weight"]),
-    supplements: z.array(z.string()),
-  }),
+  health_profile: healthProfileApiSchema,
   taste_context: z
     .object({
       liked_meal_names: z.array(z.string()),
@@ -65,7 +62,11 @@ export async function POST(req: Request) {
 
   const data: SuggestMealsRequest = parsed.data;
   const slots = mealTimesFromRequest(data.meals);
-  const system = buildSuggestMealsSystemInstruction(data.health_profile, data.taste_context);
+  const system = buildSuggestMealsSystemInstruction(
+    data.health_profile,
+    data.servings,
+    data.taste_context,
+  );
   const userMsg = buildSuggestMealsUserMessage(data);
 
   try {

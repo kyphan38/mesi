@@ -25,7 +25,7 @@ export function InsulinSpikeBadge({
         className,
       )}
     >
-      Insulin: {value}
+      Đường huyết: {value}
     </span>
   );
 }

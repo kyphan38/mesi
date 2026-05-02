@@ -7,19 +7,14 @@ import {
   buildSwapMealUserMessage,
   type HealthProfilePayload,
 } from "@/lib/ai/prompts/mesi-meals";
+import { healthProfileApiSchema } from "@/lib/ai/validators/health-profile-api";
 import { mealOptionSchema, parseAdjustMealJson } from "@/lib/ai/validators/meals";
 import { requireAuthenticatedRouteUser } from "@/lib/auth/server-route-auth";
 
 export const maxDuration = 60;
 
-const healthProfileSchema = z.object({
-  avoid: z.array(z.string()),
-  goal: z.enum(["clear_skin", "lose_weight", "gain_muscle", "maintain_weight"]),
-  supplements: z.array(z.string()),
-});
-
 const bodySchema = z.object({
-  health_profile: healthProfileSchema,
+  health_profile: healthProfileApiSchema,
   ingredients: z.array(z.string()).min(1),
   servings: z.number().int().min(1).max(99),
   slot: z.enum(["morning", "lunch", "dinner"]),
@@ -56,7 +51,7 @@ export async function POST(req: Request) {
 
   const data = parsed.data;
   const hp = data.health_profile as HealthProfilePayload;
-  const system = buildSwapMealSystemInstruction(hp);
+  const system = buildSwapMealSystemInstruction(hp, data.servings);
   const userMsg = buildSwapMealUserMessage({
     health_profile: hp,
     ingredients: data.ingredients,

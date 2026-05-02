@@ -72,6 +72,7 @@ export function LoginClientPage() {
     });
     return () => {
       unsub();
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional epoch bump per unsubscribe
       authListenerEpoch.current++;
     };
   }, [router, searchParams, syncServerSession]);

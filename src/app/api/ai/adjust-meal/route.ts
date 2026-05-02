@@ -7,24 +7,19 @@ import {
   buildAdjustMealUserMessage,
   type HealthProfilePayload,
 } from "@/lib/ai/prompts/mesi-meals";
+import { healthProfileApiSchema } from "@/lib/ai/validators/health-profile-api";
 import { mealOptionSchema, parseAdjustMealJson } from "@/lib/ai/validators/meals";
 import { requireAuthenticatedRouteUser } from "@/lib/auth/server-route-auth";
 
 export const maxDuration = 60;
 
-const healthProfileSchema = z.object({
-  avoid: z.array(z.string()),
-  goal: z.enum(["clear_skin", "lose_weight", "gain_muscle", "maintain_weight"]),
-  supplements: z.array(z.string()),
-});
-
 const bodySchema = z.object({
+  health_profile: healthProfileApiSchema,
   meal: mealOptionSchema,
+  servings: z.number().int().min(1).max(99),
   changes: z.object({
-    add: z.array(z.string()).optional(),
-    remove: z.array(z.string()).optional(),
+    remove: z.array(z.string()).min(1),
   }),
-  health_profile: healthProfileSchema,
 });
 
 export async function POST(req: Request) {
@@ -53,10 +48,15 @@ export async function POST(req: Request) {
     );
   }
 
-  const { meal, changes, health_profile } = parsed.data;
-  const hp = health_profile as HealthProfilePayload;
-  const system = buildAdjustMealSystemInstruction(hp);
-  const userMsg = buildAdjustMealUserMessage({ meal, changes, health_profile: hp });
+  const data = parsed.data;
+  const hp = data.health_profile as HealthProfilePayload;
+  const system = buildAdjustMealSystemInstruction(hp, data.servings);
+  const userMsg = buildAdjustMealUserMessage({
+    meal: data.meal,
+    health_profile: hp,
+    servings: data.servings,
+    changes: data.changes,
+  });
 
   try {
     let raw = await generateGeminiJson(system, userMsg);

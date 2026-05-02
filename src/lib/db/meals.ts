@@ -2,6 +2,7 @@
 
 import {
   addDoc,
+  deleteDoc,
   getDoc,
   getDocs,
   limit,
@@ -35,7 +36,8 @@ export type ConfirmedPlanDoc = {
   servings: number;
   slots: Partial<Record<ApiMealTime, ConfirmedSlotEntry>>;
   dayTotals: { calories: number; protein_g: number; carb_g: number; fat_g: number };
-  dayInsulin: InsulinSpikeLabel;
+  /** Legacy field on older saves only; new plans omit this. */
+  dayInsulin?: InsulinSpikeLabel;
   supplementReminder?: string;
   waterTargetLiters: number;
   shoppingNote?: string;
@@ -83,7 +85,6 @@ export function buildConfirmedPlanPayload(input: {
   slots: Partial<Record<ApiMealTime, ConfirmedSlotEntry>>;
   servings: number;
   dayTotals: ConfirmedPlanDoc["dayTotals"];
-  dayInsulin: InsulinSpikeLabel;
   supplementReminder?: string;
   waterTargetLiters: number;
   shoppingNote?: string;
@@ -99,7 +100,6 @@ export function buildConfirmedPlanPayload(input: {
     servings: input.servings,
     slots: input.slots,
     dayTotals: input.dayTotals,
-    dayInsulin: input.dayInsulin,
     supplementReminder: input.supplementReminder,
     waterTargetLiters: input.waterTargetLiters,
     shoppingNote: input.shoppingNote,
@@ -136,6 +136,37 @@ export async function getMealDoc(docId: string): Promise<MealDocWithId | null> {
   const d = snap.data() as ConfirmedPlanDoc;
   if (d.type !== "confirmed") return null;
   return { id: snap.id, data: d };
+}
+
+/** Newest confirmed plan for today's local date key, if any. */
+export async function getTodayConfirmedPlan(): Promise<MealDocWithId | null> {
+  const todayKey = localDateKey();
+  const col = userCollectionRef("meals");
+  const q = query(
+    col,
+    where("type", "==", "confirmed"),
+    where("dateKey", "==", todayKey),
+    orderBy("createdAt", "desc"),
+    limit(1),
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0]!;
+  const d = docSnap.data() as ConfirmedPlanDoc;
+  if (d.type !== "confirmed") return null;
+  return { id: docSnap.id, data: d };
+}
+
+export async function deleteConfirmedMeal(docId: string): Promise<void> {
+  await deleteDoc(userDocRef("meals", docId));
+}
+
+/** Remove all confirmed plans for a calendar day (e.g. before starting a fresh plan). */
+export async function deleteConfirmedPlansForDateKey(dateKey: string): Promise<void> {
+  const col = userCollectionRef("meals");
+  const q = query(col, where("type", "==", "confirmed"), where("dateKey", "==", dateKey));
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }
 
 export async function listMealsByPrepBatchId(batchId: string): Promise<MealDocWithId[]> {

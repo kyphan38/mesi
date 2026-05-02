@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Mesi",
     short_name: "Mesi",
-    description: "Meal planning - simple.",
+    description: "Meal planning — simple.",
     start_url: "/",
     display: "standalone",
     background_color: "#fafaf9",

@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -34,7 +35,9 @@ export function MesiTasteProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refreshTaste();
+    startTransition(() => {
+      void refreshTaste();
+    });
   }, [refreshTaste]);
 
   const value = useMemo(() => ({ tasteContext, refreshTaste }), [tasteContext, refreshTaste]);

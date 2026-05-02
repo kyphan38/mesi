@@ -93,6 +93,8 @@ export function FirebaseAuthGate({ children }: FirebaseAuthGateProps) {
     });
     return () => {
       unsub();
+      // Invalidate in-flight async work from this subscription; ref must bump on cleanup.
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional epoch bump per unsubscribe
       authListenerEpoch.current++;
     };
   }, [router, syncServerSession, targetNext]);

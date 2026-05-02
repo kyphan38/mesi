@@ -1,6 +1,50 @@
-/** UI + seed labels - stable preset IDs stored in Firestore. */
+/** UI + seed labels — stable preset IDs stored in Firestore. */
+
+import type { HealthProfileDoc, MacroTargets } from "@/types/health-profile";
 
 export type AvoidFoodPreset = { id: string; label: string };
+
+/** Default daily macro targets by Firestore nutrition goal id (~65kg male, moderately active). */
+export const MACRO_TARGETS_BY_GOAL: Record<string, MacroTargets> = {
+  eat_clean_skin: { calories: 1900, protein_g: 100, carb_g: 150, fat_g: 55 },
+  lose_weight: { calories: 1600, protein_g: 110, carb_g: 120, fat_g: 45 },
+  gain_muscle: { calories: 2400, protein_g: 130, carb_g: 250, fat_g: 65 },
+  maintain_weight: { calories: 2000, protein_g: 100, carb_g: 200, fat_g: 55 },
+};
+
+function macroTargetsValid(m: MacroTargets): boolean {
+  return (
+    Number.isFinite(m.calories) &&
+    m.calories > 0 &&
+    Number.isFinite(m.protein_g) &&
+    m.protein_g >= 0 &&
+    Number.isFinite(m.carb_g) &&
+    m.carb_g >= 0 &&
+    Number.isFinite(m.fat_g) &&
+    m.fat_g >= 0
+  );
+}
+
+export function resolveMacroTargets(
+  profile: Pick<HealthProfileDoc, "nutritionGoalIds" | "macroTargets">,
+): MacroTargets {
+  if (profile.macroTargets && macroTargetsValid(profile.macroTargets)) {
+    return profile.macroTargets;
+  }
+  const id = profile.nutritionGoalIds[0]?.trim() || "eat_clean_skin";
+  return MACRO_TARGETS_BY_GOAL[id] ?? MACRO_TARGETS_BY_GOAL.eat_clean_skin!;
+}
+
+/** Per-person daily targets × servings = household day targets for UI / prompts. */
+export function scaleMacroTargetsByServings(t: MacroTargets, servings: number): MacroTargets {
+  const s = Math.max(1, Math.min(99, Math.floor(servings)));
+  return {
+    calories: Math.round(t.calories * s),
+    protein_g: Math.round(t.protein_g * s),
+    carb_g: Math.round(t.carb_g * s),
+    fat_g: Math.round(t.fat_g * s),
+  };
+}
 
 export const AVOID_FOOD_PRESETS: AvoidFoodPreset[] = [
   { id: "refined_sugar", label: "Đường tinh luyện" },
@@ -30,7 +74,7 @@ export const SUPPLEMENT_PRESETS: SupplementPreset[] = [
   { id: "probiotic", label: "Probiotic" },
 ];
 
-/** Shown on plan + AI context - not user-editable in profile (chips only). */
+/** Shown on plan + AI context — not user-editable in profile (chips only). */
 const SUPPLEMENT_TIMING_BY_ID: Record<string, string> = {
   fish_oil: "Uống sau bữa có chất béo (sáng hoặc trưa)",
   vitamin_c: "Uống giữa buổi sáng hoặc sau bữa trưa",

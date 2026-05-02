@@ -32,7 +32,7 @@ function sumMeals(meals: MealOption[]) {
 }
 
 /**
- * Deterministic day totals vs baseline - call after user picks one option per meal.
+ * Deterministic day totals vs baseline — call after user picks one option per meal.
  * Does not call AI.
  */
 export function evaluateDayNutrition(
@@ -84,7 +84,7 @@ export function evaluateDayNutrition(
 
   const shopping =
     details.length > 0
-      ? "Nếu tiện, có thể mua thêm đậu hủ, trứng hoặc rau xanh để lấp các khoản thiếu - không bắt buộc."
+      ? "Nếu tiện, có thể mua thêm đậu hủ, trứng hoặc rau xanh để lấp các khoản thiếu — không bắt buộc."
       : undefined;
 
   return {

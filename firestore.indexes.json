@@ -15,6 +15,15 @@
         { "fieldPath": "prep_batch_id", "order": "ASCENDING" },
         { "fieldPath": "type", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "meals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "dateKey", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

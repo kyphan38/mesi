@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { History, Plus, Shuffle, User, X } from "lucide-react";
 import { AddIngredientSheet } from "@/components/home/AddIngredientSheet";
+import { TodayPlanView } from "@/components/home/TodayPlanView";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +42,12 @@ import { readCookAgainPayload } from "@/lib/plan/cook-again";
 import { writeMealPrepDraft, writePlanDraft } from "@/lib/plan/plan-draft";
 import {
   getLatestUnratedConfirmedDoc,
+  getTodayConfirmedPlan,
   updateMealRating,
   type MealDocWithId,
 } from "@/lib/db/meals";
 import type { SuggestMealPrepParsed, SuggestMealsParsed } from "@/lib/ai/validators/meals";
+import type { HealthProfileDoc } from "@/types/health-profile";
 
 type MealSlot = "morning" | "afternoon" | "evening";
 type Effort = "quick" | "medium" | "high";
@@ -110,7 +113,7 @@ function flatCustomTags(items: Record<PantryCategory, PantryPreset[]>): { id: st
 }
 
 export function HomeScreen() {
-  const ctaFooterRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
   const router = useRouter();
   const { show } = useToast();
   const { tasteContext, refreshTaste } = useMesiTaste();
@@ -152,6 +155,33 @@ export function HomeScreen() {
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [pantryReady, setPantryReady] = useState(false);
+  const [homeHeadReady, setHomeHeadReady] = useState(false);
+  const [todayPlanDoc, setTodayPlanDoc] = useState<MealDocWithId | null>(null);
+  const [homeProfile, setHomeProfile] = useState<HealthProfileDoc | null>(null);
+  const [formOverride, setFormOverride] = useState(false);
+
+  const refreshTodayPlan = useCallback(async () => {
+    try {
+      const [p, t] = await Promise.all([getHealthProfile(), getTodayConfirmedPlan()]);
+      setHomeProfile(p ?? getDefaultHealthProfile());
+      setTodayPlanDoc(t);
+      if (t != null) {
+        startTransition(() => setFormOverride(false));
+      }
+    } catch (e) {
+      console.error(e);
+      setHomeProfile(getDefaultHealthProfile());
+      setTodayPlanDoc(null);
+    } finally {
+      setHomeHeadReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    startTransition(() => {
+      void refreshTodayPlan();
+    });
+  }, [pathname, refreshTodayPlan]);
 
   const refreshMeta = useCallback(async () => {
     setMetaLoadError(null);
@@ -186,6 +216,7 @@ export function HomeScreen() {
   }, []);
 
   const applyCookAgainPayload = useCallback((payload: CookAgainPayloadV1) => {
+    setFormOverride(true);
     const n = payload.servings;
     if (n >= 1 && n <= 3) {
       setDinerPreset(String(n) as "1" | "2" | "3");
@@ -214,7 +245,9 @@ export function HomeScreen() {
       router.replace("/", { scroll: false });
       return;
     }
-    applyCookAgainPayload(payload);
+    startTransition(() => {
+      applyCookAgainPayload(payload);
+    });
     router.replace("/", { scroll: false });
   }, [pantryReady, router, applyCookAgainPayload]);
 
@@ -601,75 +634,59 @@ export function HomeScreen() {
     return true;
   });
 
-  // #region agent log
-  useLayoutEffect(() => {
-    const logCtaGeometry = () => {
-      const el = ctaFooterRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const cs = getComputedStyle(el);
-      const row = el.querySelector(":scope > div.flex");
-      let transformAncestor: string | null = null;
-      let p: HTMLElement | null = el;
-      for (let i = 0; i < 24 && p; i++) {
-        const s = getComputedStyle(p);
-        if (s.transform !== "none" || s.filter !== "none" || (s as CSSStyleDeclaration & { perspective?: string }).perspective !== "none") {
-          transformAncestor = `${p.tagName}.${String(p.className || "").slice(0, 120)}`;
-          break;
-        }
-        p = p.parentElement;
-      }
-      const buttons = el.querySelectorAll("button");
-      const b0 = buttons[0];
-      const b1 = buttons[1];
-      const r0 = b0?.getBoundingClientRect();
-      const r1 = b1?.getBoundingClientRect();
-      const rowEl = row instanceof HTMLElement ? row : null;
-      fetch("http://127.0.0.1:7903/ingest/69ee3f07-8394-40e6-ae46-c337db3ba930", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0badeb" },
-        body: JSON.stringify({
-          sessionId: "0badeb",
-          location: "HomeScreen.tsx:ctaFooterMeasure",
-          message: "cta footer geometry",
-          data: {
-            innerWidth: window.innerWidth,
-            docClientWidth: document.documentElement.clientWidth,
-            footerLeft: rect.left,
-            footerRight: rect.right,
-            footerWidth: rect.width,
-            padL: cs.paddingLeft,
-            padR: cs.paddingRight,
-            footerScrollW: el.scrollWidth,
-            footerClientW: el.clientWidth,
-            rowScrollW: rowEl?.scrollWidth ?? null,
-            rowClientW: rowEl?.clientWidth ?? null,
-            rowOverflow: rowEl ? rowEl.scrollWidth > rowEl.clientWidth + 0.5 : null,
-            btn0Left: r0?.left,
-            btn0Right: r0?.right,
-            btn0Width: r0?.width,
-            btn1Left: r1?.left,
-            btn1Width: r1?.width,
-            transformAncestor,
-            deltaBtn0ToFooterInnerLeft: r0 != null ? r0.left - rect.left - parseFloat(cs.paddingLeft || "0") : null,
-          },
-          timestamp: Date.now(),
-          hypothesisId: "A-E",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-    };
-    logCtaGeometry();
-    window.addEventListener("resize", logCtaGeometry);
-    const el = ctaFooterRef.current;
-    const ro = new ResizeObserver(() => logCtaGeometry());
-    if (el) ro.observe(el);
-    return () => {
-      window.removeEventListener("resize", logCtaGeometry);
-      ro.disconnect();
-    };
-  }, []);
-  // #endregion
+  const showTodaySummary = homeHeadReady && todayPlanDoc != null && !formOverride;
+
+  if (!homeHeadReady) {
+    return (
+      <div className="bg-background flex min-h-0 flex-1 flex-col">
+        <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
+          <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
+          <div className="w-20" />
+        </header>
+        <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">Đang tải…</div>
+      </div>
+    );
+  }
+
+  if (showTodaySummary && todayPlanDoc && homeProfile) {
+    return (
+      <div className="bg-background flex min-h-0 flex-1 flex-col">
+        <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
+          <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/history"
+              className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
+              aria-label="Lịch sử"
+            >
+              <History className="size-5" />
+            </Link>
+            <Link
+              href="/profile#cai-dat"
+              className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
+              aria-label="Hồ sơ và cài đặt"
+            >
+              <User className="size-5" />
+            </Link>
+          </div>
+        </header>
+        <RatingPromptBanner
+          doc={ratingDoc}
+          busy={ratingBusy}
+          onRate={(r) => void onRateMeal(r)}
+          onSkip={() => void onSkipRating()}
+        />
+        <TodayPlanView
+          plan={todayPlanDoc}
+          healthProfile={homeProfile}
+          onReplacedPlan={() => {
+            setFormOverride(true);
+            setTodayPlanDoc(null);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col">
@@ -735,7 +752,7 @@ export function HomeScreen() {
             <label className="border-border flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
               <div>
                 <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
-                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa - sau khi xong bạn lưu cả lịch.</p>
+                <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
               </div>
               <input
                 type="checkbox"
@@ -901,32 +918,16 @@ export function HomeScreen() {
       />
 
       <div
-        ref={ctaFooterRef}
         className={cn(
           "border-border bg-background/95 supports-[backdrop-filter]:bg-background/85 mx-auto w-full max-w-[430px] border-t px-4 pt-3 pb-2 backdrop-blur-sm",
           "max-md:fixed max-md:right-0 max-md:left-0 max-md:z-40 max-md:bottom-[var(--bottom-nav-height,4rem)]",
           "md:relative md:z-10 md:shrink-0",
         )}
       >
-        <div className="flex gap-3">
-          {!mealPrepMode ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12 min-w-0 flex-1 gap-2 text-base"
-              disabled={ctaBusy}
-              onClick={() => void runRandomPlan()}
-            >
-              <Shuffle className="size-4 shrink-0" aria-hidden />
-              {loadingRandom ? "Đang chọn ngẫu nhiên…" : "Random cho tôi"}
-            </Button>
-          ) : null}
+        <div className="flex flex-col gap-0">
           <Button
             type="button"
-            className={cn(
-              "min-h-12 text-base font-semibold",
-              mealPrepMode ? "w-full" : "min-w-0 flex-[2]",
-            )}
+            className="bg-primary text-primary-foreground min-h-12 w-full text-base font-semibold"
             disabled={ctaBusy}
             onClick={() => void (mealPrepMode ? runMealPrepFlow() : runSuggestFlow())}
           >
@@ -938,6 +939,17 @@ export function HomeScreen() {
                   ? "Lên meal prep"
                   : "Lên thực đơn"}
           </Button>
+          {!mealPrepMode ? (
+            <button
+              type="button"
+              disabled={ctaBusy || loadingRandom}
+              onClick={() => void runRandomPlan()}
+              className="text-muted-foreground hover:text-primary mt-2 w-full text-center text-sm transition-colors disabled:opacity-50"
+            >
+              <Shuffle className="mr-1 inline size-3.5 align-text-bottom" aria-hidden />
+              {loadingRandom ? "Đang chọn ngẫu nhiên…" : "hoặc random cho tôi"}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

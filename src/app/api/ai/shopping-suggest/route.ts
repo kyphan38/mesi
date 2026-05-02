@@ -7,21 +7,16 @@ import {
   buildShoppingSuggestUserMessage,
   type HealthProfilePayload,
 } from "@/lib/ai/prompts/mesi-meals";
+import { healthProfileApiSchema } from "@/lib/ai/validators/health-profile-api";
 import { mealOptionSchema, parseShoppingSuggestJson } from "@/lib/ai/validators/meals";
 import { requireAuthenticatedRouteUser } from "@/lib/auth/server-route-auth";
 
 export const maxDuration = 60;
 
-const healthProfileSchema = z.object({
-  avoid: z.array(z.string()),
-  goal: z.enum(["clear_skin", "lose_weight", "gain_muscle", "maintain_weight"]),
-  supplements: z.array(z.string()),
-});
-
 const bodySchema = z.object({
   meal: mealOptionSchema,
   available_ingredients: z.array(z.string()),
-  health_profile: healthProfileSchema,
+  health_profile: healthProfileApiSchema,
 });
 
 export async function POST(req: Request) {

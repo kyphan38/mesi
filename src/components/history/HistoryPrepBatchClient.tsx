@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { listMealsByPrepBatchId, type MealDocWithId } from "@/lib/db/meals";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 
 export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
   const [docs, setDocs] = useState<MealDocWithId[] | null | undefined>(undefined);
@@ -23,7 +23,9 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
   }, [batchId]);
 
   useEffect(() => {
-    void load();
+    startTransition(() => {
+      void load();
+    });
   }, [load]);
 
   if (docs === undefined) {
@@ -50,8 +52,13 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
   return (
     <div className="bg-background min-h-0 flex-1 pb-24">
       <header className="border-border sticky top-0 z-10 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur">
-        <Link href="/history" className="text-muted-foreground hover:text-foreground text-sm">
-          ← Lịch sử
+        <Link
+          href="/history"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
+          aria-label="Về lịch sử"
+        >
+          <ArrowLeft className="size-5 shrink-0" aria-hidden />
+          Lịch sử
         </Link>
         <span className="text-foreground font-semibold">Meal prep</span>
       </header>
@@ -62,7 +69,7 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
             <CardTitle className="text-lg">
               {docs.length} ngày · {formatDateKeyVi(first.data.dateKey)} → {formatDateKeyVi(last.data.dateKey)}
             </CardTitle>
-            <CardDescription>Từng ngày được lưu riêng - chạm để xem chi tiết.</CardDescription>
+            <CardDescription>Từng ngày được lưu riêng — chạm để xem chi tiết.</CardDescription>
           </CardHeader>
           {prepText ? (
             <CardContent className="text-muted-foreground text-sm whitespace-pre-wrap">{prepText}</CardContent>
@@ -75,10 +82,7 @@ export function HistoryPrepBatchClient({ batchId }: { batchId: string }) {
               <Card className="hover:bg-muted/30 transition-colors">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">{formatDateKeyVi(d.data.dateKey)}</CardTitle>
-                  <CardDescription className="flex flex-wrap items-center gap-2">
-                    ~{Math.round(d.data.dayTotals.calories)} kcal
-                    <InsulinSpikeBadge value={d.data.dayInsulin} />
-                  </CardDescription>
+                  <CardDescription>~{Math.round(d.data.dayTotals.calories)} kcal</CardDescription>
                 </CardHeader>
                 <CardContent className="text-muted-foreground line-clamp-2 text-sm">
                   {Object.values(d.data.slots)

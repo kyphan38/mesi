@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { useMesiTaste } from "@/components/providers/MesiTasteProvider";
-import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import type { MealOption } from "@/lib/ai/validators/meals";
 import { addDaysToLocalDateKey, localDateKey } from "@/lib/db/plan-intents";
 import {
@@ -17,12 +16,18 @@ import {
   saveConfirmedPlan,
 } from "@/lib/db/meals";
 import { clearMealPrepDraft, readMealPrepDraft, type MealPrepPlanDraftV1 } from "@/lib/plan/plan-draft";
-import { aggregateFromMeals, sumDayTotals } from "@/lib/plan/day-insulin";
+import { insulinSpikeAbbrev, sumDayTotals } from "@/lib/plan/day-insulin";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 import { getSupplementTimingHint } from "@/lib/constants/health-presets";
 import { primaryNutritionGoalKey } from "@/lib/meal-plan/nutrition-baseline";
+
+function createPrepBatchId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `prep_${Date.now()}`;
+}
 
 const KIND_VI: Record<string, string> = {
   cook_fresh: "Nấu mới",
@@ -37,7 +42,7 @@ function supplementReminderFromDraft(draft: MealPrepPlanDraftV1): string {
   return p.supplements
     .map((s) => {
       const hint = getSupplementTimingHint(s.id);
-      return hint ? `${s.label} - ${hint}` : s.label;
+      return hint ? `${s.label} — ${hint}` : s.label;
     })
     .join(" • ");
 }
@@ -93,7 +98,7 @@ function MealPrepSummary({
       map.set(row.day_index, arr);
     }
     return map;
-  }, [draft.suggestResult.meal_schedule]);
+  }, [draft]);
 
   const [saving, setSaving] = useState(false);
   const primaryGoal = useMemo(
@@ -104,10 +109,7 @@ function MealPrepSummary({
   const confirmAll = async () => {
     setSaving(true);
     try {
-      const batchId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `prep_${Date.now()}`;
+      const batchId = createPrepBatchId();
       const prepInstructions = draft.suggestResult.prep_instructions.trim();
       const allMeals: MealOption[] = [];
 
@@ -124,14 +126,12 @@ function MealPrepSummary({
 
         const meals = Object.values(slots).map((s) => s.meal);
         const dayTotals = sumDayTotals(meals);
-        const dayInsulin = aggregateFromMeals(meals);
 
         const dateKey = addDaysToLocalDateKey(startKey, day - 1);
         const payload = buildConfirmedPlanPayload({
           slots,
           servings: draft.suggestRequest.servings,
           dayTotals,
-          dayInsulin,
           supplementReminder: supplementReminderFromDraft(draft),
           waterTargetLiters: draft.profileSnapshot.waterTargetLiters,
           shoppingNote: draft.suggestResult.batch_shopping_list?.join(" · "),
@@ -199,33 +199,37 @@ function MealPrepSummary({
           const dateKey = addDaysToLocalDateKey(startKey, day - 1);
           const meals = rows.map((r) => r.meal);
           const dayTotals = sumDayTotals(meals);
-          const dayInsulin = aggregateFromMeals(meals);
 
           return (
             <Card key={day}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Ngày {day} · {formatDateKeyVi(dateKey)}</CardTitle>
-                <CardDescription className="flex flex-wrap items-center gap-2">
-                  ~{Math.round(dayTotals.calories)} kcal
-                  <InsulinSpikeBadge size="sm" value={dayInsulin} />
-                </CardDescription>
+                <CardDescription>~{Math.round(dayTotals.calories)} kcal</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {rows.map((r, idx) => (
-                  <div
-                    key={`${r.slot}-${idx}`}
-                    className="border-border flex items-start justify-between gap-2 rounded-lg border p-2 text-sm"
-                  >
-                    <div>
+                {rows.map((r, idx) => {
+                  const pr = r.meal.pick_reason?.trim();
+                  const iShort = insulinSpikeAbbrev(r.meal.insulin_spike);
+                  return (
+                    <div
+                      key={`${r.slot}-${idx}`}
+                      className="border-border rounded-lg border p-2 text-sm"
+                    >
                       <p className="text-muted-foreground text-xs">{API_SLOT_VI[r.slot]}</p>
                       <p className="text-foreground font-medium">{r.meal.name}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {KIND_VI[r.meal_kind] ?? r.meal_kind} · ~{Math.round(r.meal.calories)} kcal
+                      {pr ? (
+                        <p className="text-muted-foreground mt-0.5 text-xs leading-snug line-clamp-1" title={pr}>
+                          {pr}
+                        </p>
+                      ) : null}
+                      <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
+                        {KIND_VI[r.meal_kind] ?? r.meal_kind} · ~{Math.round(r.meal.calories)} kcal · P{" "}
+                        {Math.round(r.meal.macros.protein_g)}g · C {Math.round(r.meal.macros.carb_g)}g · F{" "}
+                        {Math.round(r.meal.macros.fat_g)}g · I {iShort}
                       </p>
                     </div>
-                    <InsulinSpikeBadge value={r.meal.insulin_spike} />
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           );

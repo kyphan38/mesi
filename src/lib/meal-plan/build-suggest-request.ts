@@ -6,7 +6,7 @@ import type {
   TasteContext,
 } from "@/lib/ai/types/meal-api";
 import type { HealthProfileDoc } from "@/types/health-profile";
-import { getAvoidFoodLabel } from "@/lib/constants/health-presets";
+import { getAvoidFoodLabel, resolveMacroTargets } from "@/lib/constants/health-presets";
 import { getPantryPreset } from "@/lib/constants/pantry-presets";
 import { primaryNutritionGoalKey } from "@/lib/meal-plan/nutrition-baseline";
 
@@ -54,6 +54,7 @@ export function buildHealthProfilePayload(profile: HealthProfileDoc): SuggestMea
     avoid,
     goal: primaryNutritionGoalKey(profile.nutritionGoalIds),
     supplements: profile.supplements.map((x) => x.label),
+    macro_targets: resolveMacroTargets(profile),
   };
 }
 
@@ -86,7 +87,7 @@ export function buildSuggestMealsRequest(input: BuildSuggestInput): SuggestMeals
 
   return {
     ingredients:
-      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn - gợi ý món linh hoạt)"],
+      ingredientLines.length > 0 ? ingredientLines : ["(chưa chọn — gợi ý món linh hoạt)"],
     meals,
     servings: Math.max(1, Math.min(99, servings)),
     health_profile: buildHealthProfilePayload(profile),

@@ -29,7 +29,7 @@ export function addDaysToLocalDateKey(dateKey: string, deltaDays: number): strin
   return localDateKey(dt);
 }
 
-/** Stub / daily tap marker - Prompt 5 may merge same doc id with `type: "confirmed"` + meal payload. */
+/** Stub / daily tap marker — Prompt 5 may merge same doc id with `type: "confirmed"` + meal payload. */
 export async function recordPlanIntentForToday(): Promise<void> {
   const dateKey = localDateKey();
   const docId = `${dateKey}_intent`;

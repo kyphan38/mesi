@@ -22,7 +22,7 @@ export type IncrementIngredientOpts = {
 };
 
 /**
- * Atomic counter - Firestore `increment(1)` + merge (no transaction).
+ * Atomic counter — Firestore `increment(1)` + merge (no transaction).
  * When `opts` is set, persists category + isCustom for pantry UX / hydrate.
  */
 export async function incrementIngredientUse(

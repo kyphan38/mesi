@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-/** Legacy `/settings` - merged into Profile; preserve bookmarks. */
+/** Legacy `/settings` — merged into Profile; preserve bookmarks. */
 export default function SettingsRedirectPage() {
   const router = useRouter();
 

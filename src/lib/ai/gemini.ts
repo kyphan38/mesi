@@ -7,7 +7,7 @@ function getGeminiApiKey(): string {
 }
 
 /**
- * JSON mode + systemInstruction / user turn - mirror Cogi tuning (temperature, model id).
+ * JSON mode + systemInstruction / user turn — mirror Cogi tuning (temperature, model id).
  */
 export async function generateGeminiJson(
   systemInstruction: string,

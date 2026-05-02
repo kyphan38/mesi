@@ -14,7 +14,7 @@ import {
   type HealthProfileDoc,
   type SupplementEntry,
 } from "@/types/health-profile";
-import { getSupplementPreset } from "@/lib/constants/health-presets";
+import { getSupplementPreset, MACRO_TARGETS_BY_GOAL, resolveMacroTargets } from "@/lib/constants/health-presets";
 
 export const MESI_COLLECTIONS = {
   profile: PROFILE_COLLECTION,
@@ -78,6 +78,7 @@ export function getDefaultHealthProfile(): HealthProfileDoc {
     customNutritionLabels: [],
     supplements,
     waterTargetLiters: 2,
+    macroTargets: MACRO_TARGETS_BY_GOAL.eat_clean_skin,
   };
 }
 
@@ -135,7 +136,29 @@ function coerceHealthProfile(raw: Record<string, unknown> | undefined): HealthPr
       .filter((x): x is SupplementEntry => x !== null);
   }
 
-  return {
+  let macroTargets: HealthProfileDoc["macroTargets"];
+  const mtRaw = raw.macroTargets;
+  if (mtRaw && typeof mtRaw === "object") {
+    const o = mtRaw as Record<string, unknown>;
+    const calories = typeof o.calories === "number" ? o.calories : NaN;
+    const protein_g = typeof o.protein_g === "number" ? o.protein_g : NaN;
+    const carb_g = typeof o.carb_g === "number" ? o.carb_g : NaN;
+    const fat_g = typeof o.fat_g === "number" ? o.fat_g : NaN;
+    if (
+      Number.isFinite(calories) &&
+      calories > 0 &&
+      Number.isFinite(protein_g) &&
+      protein_g >= 0 &&
+      Number.isFinite(carb_g) &&
+      carb_g >= 0 &&
+      Number.isFinite(fat_g) &&
+      fat_g >= 0
+    ) {
+      macroTargets = { calories, protein_g, carb_g, fat_g };
+    }
+  }
+
+  const base: HealthProfileDoc = {
     version: 1,
     setupCompletedAt,
     updatedAt,
@@ -146,6 +169,12 @@ function coerceHealthProfile(raw: Record<string, unknown> | undefined): HealthPr
     supplements,
     waterTargetLiters,
   };
+  if (macroTargets) {
+    base.macroTargets = macroTargets;
+  } else {
+    base.macroTargets = resolveMacroTargets(base);
+  }
+  return base;
 }
 
 export async function getHealthProfile(): Promise<HealthProfileDoc | null> {

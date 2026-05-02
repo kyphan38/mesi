@@ -1,6 +1,6 @@
 /**
  * Vietnam seasonal hints for meal AI prompts.
- * Month MUST be derived with Intl + Asia/Ho_Chi_Minh - never `Date.getMonth()` alone on server.
+ * Month MUST be derived with Intl + Asia/Ho_Chi_Minh — never `Date.getMonth()` alone on server.
  */
 
 export type VietnamSeasonPeriod = "dry_cool" | "hot_buildup" | "rainy_hot";
@@ -30,14 +30,14 @@ const SEASON_LABELS: Record<VietnamSeasonPeriod, string> = {
 
 const SEASON_GUIDANCE: Record<VietnamSeasonPeriod, string> = {
   dry_cool:
-    "Ưu tiên gợi ý canh/nước dùng, soup ấm, món nóng vừa phải, dễ tiêu - phù hợp thời tiết mát và hanh khô.",
+    "Ưu tiên gợi ý canh/nước dùng, soup ấm, món nóng vừa phải, dễ tiêu — phù hợp thời tiết mát và hanh khô.",
   hot_buildup:
-    "Ưu tiên salad/món mát, nhiều rau xanh, nấu nhanh - tránh quá nặng dầu mỡ khi trời nóng dần.",
+    "Ưu tiên salad/món mát, nhiều rau xanh, nấu nhanh — tránh quá nặng dầu mỡ khi trời nóng dần.",
   rainy_hot:
-    "Ưu tiên món nhẹ, dễ tiêu, đủ nước/hydrating (canh thanh, rau luộc, cháo/ súp loãng khi hợp) - trời mưa nóng dễ mệt.",
+    "Ưu tiên món nhẹ, dễ tiêu, đủ nước/hydrating (canh thanh, rau luộc, cháo/ súp loãng khi hợp) — trời mưa nóng dễ mệt.",
 };
 
-/** Nguyên liệu “đang có” phổ biến theo mùa - gợi ý khi khớp pantry. */
+/** Nguyên liệu “đang có” phổ biến theo mùa — gợi ý khi khớp pantry. */
 const SEASONAL_INGREDIENT_HINTS: Record<VietnamSeasonPeriod, string[]> = {
   dry_cool: ["cải thảo", "su hào", "củ cải", "bí đỏ", "khoai lang"],
   hot_buildup: ["dưa chuột", "cà chua", "rau muống", "giá đỗ", "đậu bắp"],
@@ -56,11 +56,11 @@ export function seasonContextPromptBlock(now: Date = new Date()): string {
 
   return [
     "",
-    "THỜI TIẾT / MÙA (Việt Nam - dùng giờ Hồ Chí Minh):",
+    "THỜI TIẾT / MÙA (Việt Nam — dùng giờ Hồ Chí Minh):",
     `Hiện tại là tháng ${month}, ${label}.`,
     guide,
     `Nguyên liệu theo mùa có thể ưu tiên khi phù hợp nguyên liệu user có: ${ingredients}.`,
-    "Không bắt buộc chỉ các nguyên liệu trên - vẫn tuân avoid/supplement của user.",
+    "Không bắt buộc chỉ các nguyên liệu trên — vẫn tuân avoid/supplement của user.",
     "",
   ].join("\n");
 }

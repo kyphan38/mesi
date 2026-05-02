@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PantryCategory, PantryPreset } from "@/lib/constants/pantry-presets";
@@ -29,8 +29,10 @@ export function AddIngredientSheet({
 
   useEffect(() => {
     if (open) {
-      setValue("");
-      setDupError(false);
+      startTransition(() => {
+        setValue("");
+        setDupError(false);
+      });
       queueMicrotask(() => inputRef.current?.focus());
     }
   }, [open, categoryId]);

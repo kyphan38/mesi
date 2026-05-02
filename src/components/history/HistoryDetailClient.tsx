@@ -1,46 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
-import { getMealDoc, type MealDocWithId } from "@/lib/db/meals";
+import { getHealthProfile } from "@/lib/db/firestore";
+import { deleteConfirmedMeal, getMealDoc, type MealDocWithId } from "@/lib/db/meals";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { buildCookAgainPayloadFromDoc, writeCookAgainPayload } from "@/lib/plan/cook-again";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
-import { macroCaloriePercents, sumDayTotals, aggregateFromMeals } from "@/lib/plan/day-insulin";
+import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
+import { sumDayTotals } from "@/lib/plan/day-insulin";
 import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
-
-function MacroBars({
-  pct,
-  totals,
-}: {
-  pct: { p: number; c: number; f: number };
-  totals: { protein_g: number; carb_g: number; fat_g: number };
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-        <div className="bg-blue-500" style={{ width: `${pct.p}%` }} />
-        <div className="bg-amber-500" style={{ width: `${pct.c}%` }} />
-        <div className="bg-rose-400" style={{ width: `${pct.f}%` }} />
-      </div>
-      <div className="text-muted-foreground flex justify-between text-xs">
-        <span>P {Math.round(totals.protein_g)}g</span>
-        <span>C {Math.round(totals.carb_g)}g</span>
-        <span>F {Math.round(totals.fat_g)}g</span>
-      </div>
-    </div>
-  );
-}
+import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
+import type { HealthProfileDoc } from "@/types/health-profile";
 
 export function HistoryDetailClient({ docId }: { docId: string }) {
   const router = useRouter();
   const { show } = useToast();
   const [row, setRow] = useState<MealDocWithId | null | undefined>(undefined);
+  const [healthProfile, setHealthProfile] = useState<HealthProfileDoc | null>(null);
 
   const load = useCallback(async () => {
     setRow(undefined);
@@ -54,8 +37,16 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
   }, [docId]);
 
   useEffect(() => {
-    void load();
+    startTransition(() => {
+      void load();
+    });
   }, [load]);
+
+  useEffect(() => {
+    startTransition(() => {
+      void getHealthProfile().then(setHealthProfile);
+    });
+  }, []);
 
   const apiSlots = useMemo(() => {
     if (!row) return [] as ApiMealTime[];
@@ -68,15 +59,38 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
   }, [row, apiSlots]);
 
   const dayTotals = useMemo(() => sumDayTotals(selectedMeals), [selectedMeals]);
-  const dayInsulin = useMemo(() => aggregateFromMeals(selectedMeals), [selectedMeals]);
-  const macroPct = useMemo(() => macroCaloriePercents(dayTotals), [dayTotals]);
+  const macroMode = apiSlots.length >= 3 ? "fullDayTargets" : "totalsOnly";
+  const macroTargetsDay = useMemo(() => {
+    const base = healthProfile ?? ({
+      nutritionGoalIds: ["eat_clean_skin"],
+    } as Pick<HealthProfileDoc, "nutritionGoalIds" | "macroTargets">);
+    const resolved = resolveMacroTargets(base);
+    const servings = row?.data.servings ?? 1;
+    return scaleMacroTargetsByServings(resolved, servings);
+  }, [healthProfile, row]);
 
   const cookAgain = () => {
     if (!row) return;
     const payload = buildCookAgainPayloadFromDoc(row.id, row.data);
     writeCookAgainPayload(payload);
     router.push("/?cookAgain=1");
-    show("Đã chuyển về trang chủ - kiểm tra nguyên liệu rồi bấm Lên thực đơn.", "info");
+    show("Đã chuyển về trang chủ — kiểm tra nguyên liệu rồi bấm Lên thực đơn.", "info");
+  };
+
+  const removeFromHistory = async () => {
+    if (!row) return;
+    const ok =
+      typeof window !== "undefined" &&
+      window.confirm("Xóa mục này khỏi lịch sử? Hành động không thể hoàn tác.");
+    if (!ok) return;
+    try {
+      await deleteConfirmedMeal(row.id);
+      show("Đã xóa.", "success");
+      router.push("/history");
+    } catch (e) {
+      console.error(e);
+      show(e instanceof Error ? e.message : "Không xóa được.", "error");
+    }
   };
 
   if (row === undefined) {
@@ -101,8 +115,13 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
   return (
     <div className="bg-background min-h-0 flex-1 pb-24">
       <header className="border-border sticky top-0 z-10 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur">
-        <Link href="/history" className="text-muted-foreground hover:text-foreground text-sm">
-          ← Lịch sử
+        <Link
+          href="/history"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
+          aria-label="Về lịch sử"
+        >
+          <ArrowLeft className="size-5 shrink-0" aria-hidden />
+          Lịch sử
         </Link>
         <span className="text-foreground font-semibold">Chi tiết</span>
       </header>
@@ -120,18 +139,22 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
               Xem cả batch prep
             </Link>
           ) : null}
+          <Button type="button" variant="outline" onClick={() => void removeFromHistory()}>
+            Xóa khỏi lịch sử
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">{formatDateKeyVi(d.dateKey)}</CardTitle>
-            <CardDescription className="flex flex-wrap items-center gap-2">
-              ~{Math.round(dayTotals.calories)} kcal · Insulin:
-              <InsulinSpikeBadge value={dayInsulin} />
+            <CardDescription>
+              {macroMode === "fullDayTargets"
+                ? `~${Math.round(dayTotals.calories)} kcal`
+                : `Tổng các bữa đã chọn · ~${Math.round(dayTotals.calories)} kcal`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <MacroBars pct={macroPct} totals={dayTotals} />
+            <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode={macroMode} />
           </CardContent>
         </Card>
 

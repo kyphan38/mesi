@@ -10,14 +10,13 @@ import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api/api-fetch";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
 import type { MealOption, RecipeDetailParsed, SuggestMealsParsed } from "@/lib/ai/validators/meals";
-import { getSupplementTimingHint } from "@/lib/constants/health-presets";
-import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
 import {
-  aggregateFromMeals,
-  anyHighGlycemicLoad,
-  macroCaloriePercents,
-  sumDayTotals,
-} from "@/lib/plan/day-insulin";
+  getSupplementTimingHint,
+  resolveMacroTargets,
+  scaleMacroTargetsByServings,
+} from "@/lib/constants/health-presets";
+import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
+import { sumDayTotals } from "@/lib/plan/day-insulin";
 import { clearPlanDraft, readPlanDraft, type PlanDraftV1 } from "@/lib/plan/plan-draft";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { evaluateDayNutrition } from "@/lib/nutrition/evaluate-day";
@@ -29,6 +28,7 @@ import {
 } from "@/lib/db/meals";
 import { IngredientEditSheet } from "@/components/plan/ingredient-edit-sheet";
 import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
+import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import { MealOptionCard } from "@/components/plan/meal-option-card";
 
 function initOptions(sr: SuggestMealsParsed): Record<ApiMealTime, MealOption[]> {
@@ -54,7 +54,7 @@ function supplementReminder(draft: PlanDraftV1): string {
   return p.supplements
     .map((s) => {
       const hint = getSupplementTimingHint(s.id);
-      return hint ? `${s.label} - ${hint}` : s.label;
+      return hint ? `${s.label} — ${hint}` : s.label;
     })
     .join(" • ");
 }
@@ -137,13 +137,25 @@ function PlanWizard({
   }, [apiSlots, selectedBySlot]);
 
   const dayTotals = useMemo(() => sumDayTotals(selectedMeals), [selectedMeals]);
-  const dayInsulin = useMemo(() => aggregateFromMeals(selectedMeals), [selectedMeals]);
-  const macroPct = useMemo(() => macroCaloriePercents(dayTotals), [dayTotals]);
-  const gaps = useMemo(
-    () => (selectedMeals.length > 0 ? evaluateDayNutrition(selectedMeals, primaryGoal) : null),
-    [selectedMeals, primaryGoal],
+  const macroTargetsDay = useMemo(
+    () =>
+      scaleMacroTargetsByServings(
+        resolveMacroTargets(draft.profileSnapshot),
+        draft.suggestRequest.servings,
+      ),
+    [draft.profileSnapshot, draft.suggestRequest.servings],
   );
-  const glWarn = useMemo(() => anyHighGlycemicLoad(selectedMeals), [selectedMeals]);
+  const macroMode = draft.suggestRequest.meals.length === 3 ? "fullDayTargets" : "totalsOnly";
+  const gaps = useMemo(
+    () =>
+      macroMode === "fullDayTargets" && selectedMeals.length > 0
+        ? evaluateDayNutrition(selectedMeals, primaryGoal)
+        : null,
+    [macroMode, selectedMeals, primaryGoal],
+  );
+  const highGlSlots = useMemo(() => {
+    return apiSlots.filter((s) => selectedBySlot[s]?.glycemic_load === "high");
+  }, [apiSlots, selectedBySlot]);
   const funFact = useMemo(() => randomFunFact(selectedMeals), [selectedMeals]);
 
   const allSelected = apiSlots.every((s) => selectedBySlot[s] != null);
@@ -187,18 +199,23 @@ function PlanWizard({
     }
   };
 
-  const applyAdjust = async (slot: ApiMealTime, changes: { add?: string[]; remove?: string[] }) => {
+  const applyAdjust = async (slot: ApiMealTime, removeLines: string[]) => {
     const meal = selectedBySlot[slot];
-    if (!meal) return;
+    if (!meal || removeLines.length === 0) return;
     setActionLoading(true);
     try {
       const res = await apiFetch("/api/ai/adjust-meal", {
         method: "POST",
-        body: JSON.stringify({ meal, changes, health_profile: hp }),
+        body: JSON.stringify({
+          meal,
+          health_profile: hp,
+          servings: draft.suggestRequest.servings,
+          changes: { remove: removeLines },
+        }),
       });
       const json = (await res.json()) as { ok?: boolean; data?: { meal: MealOption }; error?: string };
       if (!res.ok || !json.ok || !json.data?.meal) {
-        showToast(json.error ?? "Cập nhật thất bại", "error");
+        showToast(json.error ?? "Không cập nhật được món.", "error");
         return;
       }
       const updated = json.data.meal;
@@ -207,8 +224,9 @@ function PlanWizard({
         ...prev,
         [slot]: (prev[slot] ?? []).map((o) => (o.name === meal.name ? updated : o)),
       }));
-      setSheetSlot(null);
       showToast("Đã cập nhật món.", "success");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Lỗi mạng", "error");
     } finally {
       setActionLoading(false);
     }
@@ -329,7 +347,6 @@ function PlanWizard({
         slots,
         servings: draft.suggestRequest.servings,
         dayTotals,
-        dayInsulin,
         supplementReminder: supplementReminder(draft),
         waterTargetLiters: draft.profileSnapshot.waterTargetLiters,
         shoppingNote: shopping?.reassurance_note,
@@ -401,7 +418,7 @@ function PlanWizard({
                   </Button>
                   {selectedBySlot[slot] ? (
                     <Button type="button" variant="secondary" size="sm" onClick={() => setSheetSlot(slot)}>
-                      Sửa nguyên liệu / Swap
+                      Chi tiết món
                     </Button>
                   ) : null}
                 </div>
@@ -424,7 +441,7 @@ function PlanWizard({
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Gợi ý nhẹ</CardTitle>
                   <CardDescription>
-                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm - hoặc giữ nguyên nếu ổn.
+                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm — hoặc giữ nguyên nếu ổn.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
@@ -448,20 +465,17 @@ function PlanWizard({
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Cả ngày</CardTitle>
-                <CardDescription className="flex flex-wrap items-center gap-2">
-                  <span>
-                    ~{Math.round(dayTotals.calories)} kcal · Đánh giá insulin:
-                  </span>
-                  <InsulinSpikeBadge size="lg" value={dayInsulin} />
-                </CardDescription>
+                <CardTitle className="text-base">
+                  {macroMode === "fullDayTargets" ? "Cả ngày" : "Tổng các bữa đã chọn"}
+                </CardTitle>
+                <CardDescription>~{Math.round(dayTotals.calories)} kcal</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <MacroBars pct={macroPct} totals={dayTotals} />
-                {glWarn ? (
+                <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode={macroMode} />
+                {highGlSlots.length > 0 ? (
                   <p className="text-muted-foreground text-xs leading-snug">
-                    Bữa hôm nay có phần tải đường huyết khá cao. Cân nhắc thay tinh bột trắng bằng khoai lang hoặc
-                    yến mạch.
+                    {highGlSlots.map((s) => API_SLOT_VI[s]).join(", ")}: tải đường huyết cao — cân nhắc thay tinh bột
+                    trắng bằng khoai lang hoặc yến mạch.
                   </p>
                 ) : null}
               </CardContent>
@@ -526,7 +540,7 @@ function PlanWizard({
                   <ul className="text-muted-foreground list-inside list-disc space-y-1">
                     {shopping.suggestions.map((s, i) => (
                       <li key={i}>
-                        <span className="text-foreground">{s.ingredient}</span> - {s.reason}
+                        <span className="text-foreground">{s.ingredient}</span> — {s.reason}
                       </li>
                     ))}
                   </ul>
@@ -562,15 +576,15 @@ function PlanWizard({
       <IngredientEditSheet
         key={
           sheetSlot
-            ? `${sheetSlot}-${selectedBySlot[sheetSlot]?.name ?? ""}`
+            ? `${sheetSlot}-${selectedBySlot[sheetSlot]?.name ?? ""}-${(selectedBySlot[sheetSlot]?.ingredients ?? []).join("\u241F")}`
             : "closed"
         }
         open={sheetSlot != null}
         meal={sheetSlot ? selectedBySlot[sheetSlot] ?? null : null}
         slotLabel={sheetSlot ? API_SLOT_VI[sheetSlot] : ""}
         onClose={() => setSheetSlot(null)}
-        onApplyAdjust={async (ch) => {
-          if (sheetSlot) await applyAdjust(sheetSlot, ch);
+        onRemoveIngredient={async (line) => {
+          if (sheetSlot) await applyAdjust(sheetSlot, [line]);
         }}
         onSwap={async () => {
           if (sheetSlot) await runSwap(sheetSlot);
@@ -587,29 +601,6 @@ function PlanWizard({
           onClose={() => setRecipeSlot(null)}
         />
       ) : null}
-    </div>
-  );
-}
-
-function MacroBars({
-  pct,
-  totals,
-}: {
-  pct: { p: number; c: number; f: number };
-  totals: { protein_g: number; carb_g: number; fat_g: number };
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-        <div className="bg-blue-500" style={{ width: `${pct.p}%` }} />
-        <div className="bg-amber-500" style={{ width: `${pct.c}%` }} />
-        <div className="bg-rose-400" style={{ width: `${pct.f}%` }} />
-      </div>
-      <div className="text-muted-foreground flex justify-between text-xs">
-        <span>P {Math.round(totals.protein_g)}g</span>
-        <span>C {Math.round(totals.carb_g)}g</span>
-        <span>F {Math.round(totals.fat_g)}g</span>
-      </div>
     </div>
   );
 }

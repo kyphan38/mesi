@@ -2,6 +2,11 @@ import type { MealOption } from "@/lib/ai/validators/meals";
 
 export type InsulinSpikeLabel = "Thấp" | "Trung bình" | "Cao";
 
+/** Compact insulin/đường huyết label for macro row (I …). */
+export function insulinSpikeAbbrev(value: InsulinSpikeLabel): string {
+  return value === "Trung bình" ? "TB" : value;
+}
+
 const INSULIN_ORDER: Record<InsulinSpikeLabel, number> = {
   Thấp: 0,
   "Trung bình": 1,
@@ -40,7 +45,7 @@ export function aggregateFromMeals(meals: MealOption[]): InsulinSpikeLabel {
 
 export type GlycemicLoadLevel = "low" | "medium" | "high";
 
-/** True if any meal has high GL - drives mild starch warning on summary. */
+/** True if any meal has high GL — drives mild starch warning on summary. */
 export function anyHighGlycemicLoad(meals: MealOption[]): boolean {
   return meals.some((m) => m.glycemic_load === "high");
 }
