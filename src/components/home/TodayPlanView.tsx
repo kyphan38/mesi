@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
 import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
@@ -41,18 +40,12 @@ export function TodayPlanView({
 }) {
   const d = plan.data;
 
-  const hasFullDay = useMemo(
-    () => ALL_API_SLOTS.every((t) => d.slots[t]?.meal != null),
-    [d.slots],
-  );
-
   const macroTargetsDay = useMemo(
     () => scaleMacroTargetsByServings(resolveMacroTargets(healthProfile), d.servings),
     [healthProfile, d.servings],
   );
 
   const funFact = useMemo(() => randomFunFactFromPlan(d), [d]);
-  const macroMode = hasFullDay ? "fullDayTargets" : "totalsOnly";
 
   const startNewPlan = () => {
     setHomeComposeNewPlanActive(true);
@@ -69,17 +62,13 @@ export function TodayPlanView({
 
         <Card>
           <CardHeader className="space-y-1 pb-2">
-            <CardTitle className="text-base font-medium leading-snug">
-              {macroMode === "fullDayTargets" ? "Tóm tắt dinh dưỡng" : "Tổng các bữa đã chọn"}
-            </CardTitle>
+            <CardTitle className="text-base font-medium leading-snug">Tóm tắt dinh dưỡng</CardTitle>
             <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
-              {macroMode === "fullDayTargets"
-                ? `~${Math.round(d.dayTotals.calories)} kcal đã lưu`
-                : `~${Math.round(d.dayTotals.calories)} kcal · chưa so với mục tiêu cả ngày`}
+              ~{Math.round(d.dayTotals.calories)} kcal
             </p>
           </CardHeader>
           <CardContent>
-            <MacroProgressBars totals={d.dayTotals} targets={macroTargetsDay} mode={macroMode} />
+            <MacroProgressBars totals={d.dayTotals} targets={macroTargetsDay} mode="fullDayTargets" />
           </CardContent>
         </Card>
 
@@ -94,19 +83,14 @@ export function TodayPlanView({
                     href={`/history/${plan.id}`}
                     className="border-border hover:bg-muted/50 block p-4 text-left text-sm"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                          {API_SLOT_VI[slot]}
-                        </p>
-                        <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
-                        <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
-                          ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
-                          {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
-                        </p>
-                      </div>
-                      <InsulinSpikeBadge value={entry.meal.insulin_spike} />
-                    </div>
+                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                      {API_SLOT_VI[slot]}
+                    </p>
+                    <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
+                    <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
+                      ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
+                      {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
+                    </p>
                   </Link>
                   <div className="border-border flex justify-end border-t px-3 py-2">
                     <button

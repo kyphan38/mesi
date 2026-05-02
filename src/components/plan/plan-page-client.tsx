@@ -147,13 +147,9 @@ function PlanWizard({
       ),
     [draft.profileSnapshot, draft.suggestRequest.servings],
   );
-  const macroMode = draft.suggestRequest.meals.length === 3 ? "fullDayTargets" : "totalsOnly";
   const gaps = useMemo(
-    () =>
-      macroMode === "fullDayTargets" && selectedMeals.length > 0
-        ? evaluateDayNutrition(selectedMeals, primaryGoal)
-        : null,
-    [macroMode, selectedMeals, primaryGoal],
+    () => (selectedMeals.length > 0 ? evaluateDayNutrition(selectedMeals, primaryGoal) : null),
+    [selectedMeals, primaryGoal],
   );
   const highGlSlots = useMemo(() => {
     return apiSlots.filter((s) => selectedBySlot[s]?.glycemic_load === "high");
@@ -470,15 +466,13 @@ function PlanWizard({
 
             <Card>
               <CardHeader className="space-y-1">
-                <CardTitle className="text-base font-medium leading-snug">
-                  {macroMode === "fullDayTargets" ? "Cả ngày" : "Tổng các bữa đã chọn"}
-                </CardTitle>
+                <CardTitle className="text-base font-medium leading-snug">Tóm tắt dinh dưỡng</CardTitle>
                 <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
-                  ~{Math.round(dayTotals.calories)} kcal
+                  ~{Math.round(dayTotals.calories)} kcal đã lưu
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
-                <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode={macroMode} />
+                <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode="fullDayTargets" />
                 {highGlSlots.length > 0 ? (
                   <p className="text-muted-foreground text-xs leading-snug">
                     {highGlSlots.map((s) => API_SLOT_VI[s]).join(", ")}: tải đường huyết cao - cân nhắc thay tinh bột
@@ -493,7 +487,6 @@ function PlanWizard({
               {apiSlots.map((slot) => {
                 const m = selectedBySlot[slot];
                 if (!m) return null;
-                const iShort = insulinSpikeAbbrev(m.insulin_spike);
                 return (
                   <button
                     key={slot}
@@ -507,8 +500,7 @@ function PlanWizard({
                     <p className="text-foreground mt-1 text-base font-medium leading-snug">{m.name}</p>
                     <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
                       ~{Math.round(m.calories)} kcal · P {Math.round(m.macros.protein_g)}g · C{" "}
-                      {Math.round(m.macros.carb_g)}g · F {Math.round(m.macros.fat_g)}g · I{" "}
-                      <span className={cn("font-normal", insulinSpikeTextClass(m.insulin_spike))}>{iShort}</span>
+                      {Math.round(m.macros.carb_g)}g · F {Math.round(m.macros.fat_g)}g
                     </p>
                   </button>
                 );

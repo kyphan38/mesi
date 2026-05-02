@@ -15,7 +15,6 @@ import { buildCookAgainPayloadFromDoc, writeCookAgainPayload } from "@/lib/plan/
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
 import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
-import { InsulinSpikeBadge } from "@/components/plan/insulin-spike-badge";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import type { HealthProfileDoc } from "@/types/health-profile";
 
@@ -50,12 +49,6 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
     });
   }, []);
 
-  const hasFullDay = useMemo(() => {
-    if (!row) return false;
-    return ALL_API_SLOTS.every((t) => row.data.slots[t]?.meal != null);
-  }, [row]);
-
-  const macroMode = hasFullDay ? "fullDayTargets" : "totalsOnly";
   const macroTargetsDay = useMemo(() => {
     const base = healthProfile ?? ({
       nutritionGoalIds: ["eat_clean_skin"],
@@ -107,8 +100,6 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
   }
 
   const d = row.data;
-  const summaryTitle =
-    macroMode === "fullDayTargets" ? "Tóm tắt dinh dưỡng" : "Tổng các bữa đã chọn";
 
   return (
     <div className="bg-background min-h-0 flex-1 pb-24">
@@ -150,15 +141,13 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
         <Card>
           <CardHeader className="space-y-1 pb-2">
             <p className="text-muted-foreground text-sm font-normal">{formatDateKeyVi(d.dateKey)}</p>
-            <CardTitle className="text-base font-medium leading-snug">{summaryTitle}</CardTitle>
+            <CardTitle className="text-base font-medium leading-snug">Tóm tắt dinh dưỡng</CardTitle>
             <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
-              {macroMode === "fullDayTargets"
-                ? `~${Math.round(d.dayTotals.calories)} kcal đã lưu`
-                : `~${Math.round(d.dayTotals.calories)} kcal · chưa so với mục tiêu cả ngày`}
+              ~{Math.round(d.dayTotals.calories)} kcal đã lưu
             </p>
           </CardHeader>
           <CardContent>
-            <MacroProgressBars totals={d.dayTotals} targets={macroTargetsDay} mode={macroMode} />
+            <MacroProgressBars totals={d.dayTotals} targets={macroTargetsDay} mode="fullDayTargets" />
           </CardContent>
         </Card>
 
@@ -173,22 +162,17 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
                   key={slot}
                   className="border-border rounded-lg border p-4"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                        {API_SLOT_VI[slot]}
-                      </p>
-                      {entry.is_reheated ? (
-                        <p className="text-muted-foreground mt-1 text-xs font-normal">Hâm lại / từ tủ lạnh</p>
-                      ) : null}
-                      <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
-                      <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
-                        ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
-                        {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
-                      </p>
-                    </div>
-                    <InsulinSpikeBadge value={entry.meal.insulin_spike} className="shrink-0" />
-                  </div>
+                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    {API_SLOT_VI[slot]}
+                  </p>
+                  {entry.is_reheated ? (
+                    <p className="text-muted-foreground mt-1 text-xs font-normal">Hâm lại / từ tủ lạnh</p>
+                  ) : null}
+                  <p className="text-foreground mt-1 text-base font-medium leading-snug">{entry.meal.name}</p>
+                  <p className="text-muted-foreground mt-1 text-sm font-normal tabular-nums">
+                    ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
+                    {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
+                  </p>
                   {entry.recipe?.steps?.length ? (
                     <div className="mt-5">
                       <p className="text-muted-foreground mb-3 text-sm font-medium">Các bước</p>
