@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Settings, User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { History, Settings, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RatingPromptBanner } from "@/components/home/RatingPromptBanner";
 import { useToast } from "@/components/ui/toast";
+import { useMesiTaste } from "@/components/providers/MesiTasteProvider";
 import { cn } from "@/lib/utils";
 import {
   ALL_PANTRY_PRESETS,
@@ -24,6 +27,23 @@ import {
   countDistinctIntentDays,
   recordPlanIntentForToday,
 } from "@/lib/db/plan-intents";
+import { apiFetch } from "@/lib/api/api-fetch";
+import { getDefaultHealthProfile, getHealthProfile } from "@/lib/db/firestore";
+import {
+  buildSuggestMealPrepRequest,
+  buildSuggestMealsRequest,
+  labelsFromPantrySelection,
+} from "@/lib/meal-plan/build-suggest-request";
+import { ingredientLineDocId } from "@/lib/meal-plan/ingredient-id";
+import type { CookAgainPayloadV1 } from "@/lib/plan/cook-again";
+import { readCookAgainPayload } from "@/lib/plan/cook-again";
+import { writeMealPrepDraft, writePlanDraft } from "@/lib/plan/plan-draft";
+import {
+  getLatestUnratedConfirmedDoc,
+  updateMealRating,
+  type MealDocWithId,
+} from "@/lib/db/meals";
+import type { SuggestMealPrepParsed, SuggestMealsParsed } from "@/lib/ai/validators/meals";
 
 type MealSlot = "morning" | "afternoon" | "evening";
 type Effort = "quick" | "medium" | "high";
@@ -40,20 +60,10 @@ const EFFORT_OPTIONS: { id: Effort; label: string }[] = [
   { id: "high", label: "Kỳ công (>30 phút)" },
 ];
 
-function customIngredientDocId(label: string): string {
-  const base = label
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 48);
-  return `c_${base || "x"}`;
-}
-
 export function HomeScreen() {
+  const router = useRouter();
   const { show } = useToast();
+  const { tasteContext, refreshTaste } = useMesiTaste();
   const [stats, setStats] = useState<IngredientStat[]>([]);
   const [intentDays, setIntentDays] = useState(0);
 
@@ -77,6 +87,12 @@ export function HomeScreen() {
 
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [loadingQuick, setLoadingQuick] = useState(false);
+  const [loadingPrep, setLoadingPrep] = useState(false);
+
+  const [ratingDoc, setRatingDoc] = useState<MealDocWithId | null>(null);
+  const [ratingBusy, setRatingBusy] = useState(false);
+  const [mealPrepMode, setMealPrepMode] = useState(false);
+  const [prepDayCount, setPrepDayCount] = useState(3);
 
   const refreshMeta = useCallback(async () => {
     try {
@@ -96,6 +112,48 @@ export function HomeScreen() {
         if (cancelled) return;
         setStats(s);
         setIntentDays(c);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyCookAgainPayload = useCallback((payload: CookAgainPayloadV1) => {
+    const n = payload.servings;
+    if (n >= 1 && n <= 3) {
+      setDinerPreset(String(n) as "1" | "2" | "3");
+    } else {
+      setDinerPreset("other");
+      setDinerOther(String(n));
+    }
+    setMealOn(payload.mealOn);
+    setEffort(payload.effort);
+    setSelectedPantry(new Set(payload.selectedPantryIds));
+    setCustomTags(payload.customTags);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("cookAgain") !== "1") return;
+    const payload = readCookAgainPayload();
+    if (!payload) {
+      router.replace("/", { scroll: false });
+      return;
+    }
+    applyCookAgainPayload(payload);
+    router.replace("/", { scroll: false });
+  }, [router, applyCookAgainPayload]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const d = await getLatestUnratedConfirmedDoc();
+        if (!cancelled) setRatingDoc(d);
       } catch (e) {
         console.error(e);
       }
@@ -141,7 +199,7 @@ export function HomeScreen() {
   const addCustomPantry = () => {
     const t = customInput.trim();
     if (!t) return;
-    const id = customIngredientDocId(t);
+    const id = ingredientLineDocId(t);
     if (customTags.some((c) => c.id === id) || selectedPantry.has(id)) {
       setCustomInput("");
       return;
@@ -169,17 +227,128 @@ export function HomeScreen() {
     });
   };
 
-  const runMenuStub = async (fromQuick: boolean) => {
+  const runSuggestFlow = async (fromQuick: boolean) => {
+    const enabled = (Object.keys(MEAL_LABELS) as MealSlot[]).some((s) => mealOn[s]);
+    if (!enabled) {
+      show("Chọn ít nhất một buổi để lên thực đơn.", "error");
+      return;
+    }
+
     if (fromQuick) setLoadingQuick(true);
     else setLoadingMenu(true);
     try {
-      await new Promise((r) => setTimeout(r, 900));
+      const profile = (await getHealthProfile()) ?? getDefaultHealthProfile();
+      const body = buildSuggestMealsRequest({
+        profile,
+        servings: effectiveDiners,
+        mealOn,
+        effort,
+        selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, customTags),
+        tasteContext,
+      });
+
+      const res = await apiFetch("/api/ai/suggest-meals", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; data?: SuggestMealsParsed };
+
+      if (!res.ok || !json.ok || !json.data) {
+        show(json.error ?? `Lỗi ${res.status}`, "error");
+        return;
+      }
+
+      writePlanDraft({
+        version: 1,
+        suggestResult: json.data,
+        suggestRequest: body,
+        profileSnapshot: profile,
+      });
       await recordPlanIntentForToday();
       await refreshMeta();
-      show(fromQuick ? "Plan nhanh (bản thử) — AI sắp tới." : "Đang chuẩn bị thực đơn (bản thử).", "info");
+      show(fromQuick ? "Đang mở gợi ý…" : "Đang mở gợi ý…", "info");
+      router.push("/plan");
+    } catch (e) {
+      show(e instanceof Error ? e.message : "Không gọi được API.", "error");
     } finally {
       setLoadingMenu(false);
       setLoadingQuick(false);
+    }
+  };
+
+  const runMealPrepFlow = async () => {
+    const enabled = (Object.keys(MEAL_LABELS) as MealSlot[]).some((s) => mealOn[s]);
+    if (!enabled) {
+      show("Chọn ít nhất một buổi để lên meal prep.", "error");
+      return;
+    }
+    setLoadingPrep(true);
+    try {
+      const profile = (await getHealthProfile()) ?? getDefaultHealthProfile();
+      const body = buildSuggestMealPrepRequest({
+        profile,
+        servings: effectiveDiners,
+        mealOn,
+        effort,
+        selectedIngredientLabels: labelsFromPantrySelection(selectedPantry, customTags),
+        prepDayCount,
+        tasteContext,
+      });
+
+      const res = await apiFetch("/api/ai/suggest-meal-prep", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; data?: SuggestMealPrepParsed };
+
+      if (!res.ok || !json.ok || !json.data) {
+        show(json.error ?? `Lỗi ${res.status}`, "error");
+        return;
+      }
+
+      writeMealPrepDraft({
+        version: 1,
+        prepDayCount: body.prep_day_count,
+        suggestResult: json.data,
+        suggestRequest: body,
+        profileSnapshot: profile,
+      });
+      await recordPlanIntentForToday();
+      await refreshMeta();
+      show("Đang mở meal prep…", "info");
+      router.push("/plan/prep");
+    } catch (e) {
+      show(e instanceof Error ? e.message : "Không gọi được API.", "error");
+    } finally {
+      setLoadingPrep(false);
+    }
+  };
+
+  const onRateMeal = async (r: "good" | "neutral" | "bad") => {
+    if (!ratingDoc) return;
+    setRatingBusy(true);
+    try {
+      await updateMealRating(ratingDoc.id, r);
+      await refreshTaste();
+      setRatingDoc(null);
+      show("Đã lưu đánh giá.", "success");
+    } catch (e) {
+      show(e instanceof Error ? e.message : "Không lưu được.", "error");
+    } finally {
+      setRatingBusy(false);
+    }
+  };
+
+  const onSkipRating = async () => {
+    if (!ratingDoc) return;
+    setRatingBusy(true);
+    try {
+      await updateMealRating(ratingDoc.id, "skipped");
+      setRatingDoc(null);
+    } catch (e) {
+      show(e instanceof Error ? e.message : "Không lưu được.", "error");
+    } finally {
+      setRatingBusy(false);
     }
   };
 
@@ -238,6 +407,13 @@ export function HomeScreen() {
         <span className="text-foreground text-lg font-semibold tracking-tight">Mesi</span>
         <div className="flex items-center gap-1">
           <Link
+            href="/history"
+            className="text-muted-foreground hover:text-foreground inline-flex h-10 w-10 items-center justify-center rounded-lg"
+            aria-label="Lịch sử"
+          >
+            <History className="size-5" />
+          </Link>
+          <Link
             href="/profile"
             className="text-muted-foreground hover:text-foreground inline-flex h-10 w-10 items-center justify-center rounded-lg"
             aria-label="Hồ sơ"
@@ -255,22 +431,69 @@ export function HomeScreen() {
       </header>
 
       <div className="mx-auto w-full max-w-[430px] space-y-6 px-4 py-4 pb-10">
+        <RatingPromptBanner
+          doc={ratingDoc}
+          busy={ratingBusy}
+          onRate={(r) => void onRateMeal(r)}
+          onSkip={() => void onSkipRating()}
+        />
+
         {intentDays >= 3 ? (
           <div>
             <Button
               type="button"
               variant="outline"
               className="min-h-11 w-full"
-              disabled={loadingQuick}
-              onClick={() => void runMenuStub(true)}
+              disabled={loadingQuick || mealPrepMode}
+              onClick={() => void runSuggestFlow(true)}
             >
               {loadingQuick ? "Đang chuẩn bị…" : "Plan nhanh"}
             </Button>
             <p className="text-muted-foreground mt-1.5 text-center text-xs">
-              Dùng gợi ý từ lịch sử (AI sắp tới)
+              Gợi ý nhanh cùng backend Gemini
             </p>
+            {mealPrepMode ? (
+              <p className="text-muted-foreground mt-1 text-center text-xs">Tắt Meal prep để dùng Plan nhanh.</p>
+            ) : null}
           </div>
         ) : null}
+
+        <section className="space-y-3">
+          <label className="border-border flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
+            <div>
+              <p className="text-foreground font-medium">Meal prep (nhiều ngày)</p>
+              <p className="text-muted-foreground text-xs">Một lần nấu, chia bữa — sau khi xong bạn lưu cả lịch.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={mealPrepMode}
+              onChange={() => setMealPrepMode((x) => !x)}
+              className="border-input size-5 rounded"
+              aria-label="Bật meal prep"
+            />
+          </label>
+          {mealPrepMode ? (
+            <div className="space-y-1">
+              <p className="text-muted-foreground text-xs font-medium">Số ngày liên tiếp (2–7)</p>
+              <Input
+                type="number"
+                min={2}
+                max={7}
+                className="min-h-11 max-w-[8rem] text-base"
+                value={prepDayCount}
+                onChange={(e) => {
+                  const n = Number.parseInt(e.target.value, 10);
+                  if (!Number.isFinite(n)) {
+                    setPrepDayCount(2);
+                    return;
+                  }
+                  setPrepDayCount(Math.max(2, Math.min(7, n)));
+                }}
+                aria-label="Số ngày meal prep"
+              />
+            </div>
+          ) : null}
+        </section>
 
         <section className="space-y-2">
           <h2 className="text-foreground text-sm font-medium">Số người ăn</h2>
@@ -426,10 +649,16 @@ export function HomeScreen() {
         <Button
           type="button"
           className="min-h-12 w-full text-base font-semibold"
-          disabled={loadingMenu}
-          onClick={() => void runMenuStub(false)}
+          disabled={loadingMenu || loadingPrep}
+          onClick={() => void (mealPrepMode ? runMealPrepFlow() : runSuggestFlow(false))}
         >
-          {loadingMenu ? "Đang nghĩ món…" : "Lên thực đơn"}
+          {loadingPrep
+            ? "Đang lập meal prep…"
+            : loadingMenu
+              ? "Đang nghĩ món…"
+              : mealPrepMode
+                ? "Lên meal prep"
+                : "Lên thực đơn"}
         </Button>
       </div>
     </div>

@@ -18,6 +18,17 @@ export function localDateKey(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Add whole calendar days to a YYYY-MM-DD string (local timezone). */
+export function addDaysToLocalDateKey(dateKey: string, deltaDays: number): string {
+  const parts = dateKey.split("-").map(Number);
+  const y = parts[0]!;
+  const mo = parts[1]!;
+  const day = parts[2]!;
+  const dt = new Date(y, mo - 1, day);
+  dt.setDate(dt.getDate() + deltaDays);
+  return localDateKey(dt);
+}
+
 /** Stub / daily tap marker — Prompt 5 may merge same doc id with `type: "confirmed"` + meal payload. */
 export async function recordPlanIntentForToday(): Promise<void> {
   const dateKey = localDateKey();

@@ -1,4 +1,5 @@
 import { FirebaseAuthGate } from "@/components/auth/FirebaseAuthGate";
+import { MesiTasteProvider } from "@/components/providers/MesiTasteProvider";
 import { ProfileSetupGate } from "@/components/profile/ProfileSetupGate";
 
 export default function MainLayout({
@@ -9,7 +10,9 @@ export default function MainLayout({
   return (
     <FirebaseAuthGate>
       <ProfileSetupGate>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <MesiTasteProvider>
+          <div className="flex flex-1 flex-col">{children}</div>
+        </MesiTasteProvider>
       </ProfileSetupGate>
     </FirebaseAuthGate>
   );
