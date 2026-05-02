@@ -5,7 +5,12 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
-import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
+import { MealIngredientsCollapsible } from "@/components/plan/meal-ingredients-list";
+import {
+  resolveMacroTargets,
+  scaleMacroTargetsByPlannedMealSlots,
+  scaleMacroTargetsByServings,
+} from "@/lib/constants/health-presets";
 import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
@@ -40,10 +45,15 @@ export function TodayPlanView({
 }) {
   const d = plan.data;
 
-  const macroTargetsDay = useMemo(
-    () => scaleMacroTargetsByServings(resolveMacroTargets(healthProfile), d.servings),
-    [healthProfile, d.servings],
+  const plannedSlotCount = useMemo(
+    () => ALL_API_SLOTS.filter((t) => d.slots[t]?.meal != null).length,
+    [d.slots],
   );
+
+  const macroTargetsDay = useMemo(() => {
+    const householdDay = scaleMacroTargetsByServings(resolveMacroTargets(healthProfile), d.servings);
+    return scaleMacroTargetsByPlannedMealSlots(householdDay, plannedSlotCount);
+  }, [healthProfile, d.servings, plannedSlotCount]);
 
   const funFact = useMemo(() => randomFunFactFromPlan(d), [d]);
 
@@ -92,6 +102,12 @@ export function TodayPlanView({
                       {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
                     </p>
                   </Link>
+                  <div className="px-4 pb-1">
+                    <MealIngredientsCollapsible
+                      ingredients={entry.meal.ingredients ?? []}
+                      missingIngredients={entry.meal.missing_ingredients ?? []}
+                    />
+                  </div>
                   <div className="border-border flex justify-end border-t px-3 py-2">
                     <button
                       type="button"

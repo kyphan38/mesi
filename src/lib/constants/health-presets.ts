@@ -46,6 +46,33 @@ export function scaleMacroTargetsByServings(t: MacroTargets, servings: number): 
   };
 }
 
+const PLANNED_MEALS_MAX = 3;
+
+/**
+ * Scale household **full-day** targets to the share of the day covered by planned meals.
+ * Uses an even split: one meal ≈ 1/3 of daily macros (simple, guideline-friendly).
+ * - 1 slot filled → targets × (1/3)
+ * - 2 slots → × (2/3)
+ * - 3 slots → × 1
+ * If `plannedMealSlotCount` is 0, returns full-day targets (denominator 1).
+ */
+export function scaleMacroTargetsByPlannedMealSlots(
+  householdFullDayTargets: MacroTargets,
+  plannedMealSlotCount: number,
+): MacroTargets {
+  const n =
+    plannedMealSlotCount <= 0
+      ? PLANNED_MEALS_MAX
+      : Math.min(PLANNED_MEALS_MAX, Math.max(1, Math.floor(plannedMealSlotCount)));
+  const factor = n / PLANNED_MEALS_MAX;
+  return {
+    calories: Math.round(householdFullDayTargets.calories * factor),
+    protein_g: Math.round(householdFullDayTargets.protein_g * factor),
+    carb_g: Math.round(householdFullDayTargets.carb_g * factor),
+    fat_g: Math.round(householdFullDayTargets.fat_g * factor),
+  };
+}
+
 export const AVOID_FOOD_PRESETS: AvoidFoodPreset[] = [
   { id: "refined_sugar", label: "Đường tinh luyện" },
   { id: "dairy", label: "Sữa bò / phô mai" },

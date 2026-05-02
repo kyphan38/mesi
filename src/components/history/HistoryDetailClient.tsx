@@ -13,9 +13,14 @@ import { deleteConfirmedMeal, getMealDoc, type MealDocWithId } from "@/lib/db/me
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
 import { buildCookAgainPayloadFromDoc, writeCookAgainPayload } from "@/lib/plan/cook-again";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
-import { resolveMacroTargets, scaleMacroTargetsByServings } from "@/lib/constants/health-presets";
+import {
+  resolveMacroTargets,
+  scaleMacroTargetsByPlannedMealSlots,
+  scaleMacroTargetsByServings,
+} from "@/lib/constants/health-presets";
 import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
 import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
+import { MealIngredientsCollapsible } from "@/components/plan/meal-ingredients-list";
 import type { HealthProfileDoc } from "@/types/health-profile";
 
 const ALL_API_SLOTS: ApiMealTime[] = ["morning", "lunch", "dinner"];
@@ -49,14 +54,20 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
     });
   }, []);
 
+  const plannedSlotCount = useMemo(() => {
+    if (!row) return 0;
+    return ALL_API_SLOTS.filter((t) => row.data.slots[t]?.meal != null).length;
+  }, [row]);
+
   const macroTargetsDay = useMemo(() => {
     const base = healthProfile ?? ({
       nutritionGoalIds: ["eat_clean_skin"],
     } as Pick<HealthProfileDoc, "nutritionGoalIds" | "macroTargets">);
     const resolved = resolveMacroTargets(base);
     const servings = row?.data.servings ?? 1;
-    return scaleMacroTargetsByServings(resolved, servings);
-  }, [healthProfile, row]);
+    const householdDay = scaleMacroTargetsByServings(resolved, servings);
+    return scaleMacroTargetsByPlannedMealSlots(householdDay, plannedSlotCount);
+  }, [healthProfile, row, plannedSlotCount]);
 
   const cookAgain = () => {
     if (!row) return;
@@ -160,7 +171,7 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
               return (
                 <div
                   key={slot}
-                  className="border-border rounded-lg border p-4"
+                  className="border-border rounded-lg border px-4 py-4"
                 >
                   <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                     {API_SLOT_VI[slot]}
@@ -173,6 +184,10 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
                     ~{Math.round(entry.meal.calories)} kcal · P {Math.round(entry.meal.macros.protein_g)}g · C{" "}
                     {Math.round(entry.meal.macros.carb_g)}g · F {Math.round(entry.meal.macros.fat_g)}g
                   </p>
+                  <MealIngredientsCollapsible
+                    ingredients={entry.meal.ingredients ?? []}
+                    missingIngredients={entry.meal.missing_ingredients ?? []}
+                  />
                   {entry.recipe?.steps?.length ? (
                     <div className="mt-5">
                       <p className="text-muted-foreground mb-3 text-sm font-medium">Các bước</p>

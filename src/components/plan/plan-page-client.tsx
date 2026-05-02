@@ -13,6 +13,7 @@ import type { MealOption, RecipeDetailParsed, SuggestMealsParsed } from "@/lib/a
 import {
   getSupplementTimingHint,
   resolveMacroTargets,
+  scaleMacroTargetsByPlannedMealSlots,
   scaleMacroTargetsByServings,
 } from "@/lib/constants/health-presets";
 import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
@@ -139,14 +140,13 @@ function PlanWizard({
   }, [apiSlots, selectedBySlot]);
 
   const dayTotals = useMemo(() => sumDayTotals(selectedMeals), [selectedMeals]);
-  const macroTargetsDay = useMemo(
-    () =>
-      scaleMacroTargetsByServings(
-        resolveMacroTargets(draft.profileSnapshot),
-        draft.suggestRequest.servings,
-      ),
-    [draft.profileSnapshot, draft.suggestRequest.servings],
-  );
+  const macroTargetsDay = useMemo(() => {
+    const householdDay = scaleMacroTargetsByServings(
+      resolveMacroTargets(draft.profileSnapshot),
+      draft.suggestRequest.servings,
+    );
+    return scaleMacroTargetsByPlannedMealSlots(householdDay, selectedMeals.length);
+  }, [draft.profileSnapshot, draft.suggestRequest.servings, selectedMeals.length]);
   const gaps = useMemo(
     () => (selectedMeals.length > 0 ? evaluateDayNutrition(selectedMeals, primaryGoal) : null),
     [selectedMeals, primaryGoal],

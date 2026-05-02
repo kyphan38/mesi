@@ -55,27 +55,52 @@ export function MacroProgressBars({
       {ROWS.map(({ key, label, color, unit }) => {
         const current = totals[key];
         const target = Math.max(1, targets[key]);
-        const pct = Math.min(100, (current / target) * 100);
-        const low = target > 0 && current / target < 0.7;
+        const ratio = current / target;
+        const low = ratio < 0.7;
+        const over = ratio > 1 + 1e-6;
         const valueStr =
           unit === "kcal"
             ? `${Math.round(current)}/${Math.round(target)} kcal`
             : `${Math.round(current)}/${Math.round(target)}g`;
+
         return (
           <div key={key} className="space-y-1 py-2 first:pt-0 last:pb-0">
             <div className="flex justify-between gap-3 text-sm">
               <span className="font-normal text-muted-foreground">{label}</span>
               <span
                 className={cn(
-                  "text-right font-medium tabular-nums text-foreground",
-                  low && "text-amber-600 dark:text-amber-500",
+                  "text-right font-medium tabular-nums",
+                  over && "text-amber-700 dark:text-amber-400",
+                  !over && low && "text-amber-600 dark:text-amber-500",
+                  !over && !low && "text-foreground",
                 )}
               >
                 {valueStr}
+                {over ? (
+                  <span className="text-muted-foreground ml-1 text-xs font-normal">(vượt mục tiêu)</span>
+                ) : null}
               </span>
             </div>
-            <div className="bg-muted h-2 overflow-hidden rounded-full">
-              <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+            <div className="bg-muted flex h-2 w-full overflow-hidden rounded-full">
+              {over ? (
+                <>
+                  <div
+                    className={cn("h-full rounded-l-full transition-all", color)}
+                    style={{ width: `${(target / current) * 100}%` }}
+                    title="Trong mục tiêu"
+                  />
+                  <div
+                    className="h-full rounded-r-full bg-amber-500 transition-all dark:bg-amber-600"
+                    style={{ width: `${((current - target) / current) * 100}%` }}
+                    title="Vượt mục tiêu"
+                  />
+                </>
+              ) : (
+                <div
+                  className={cn("h-full rounded-full transition-all", color)}
+                  style={{ width: `${Math.min(100, ratio * 100)}%` }}
+                />
+              )}
             </div>
           </div>
         );
