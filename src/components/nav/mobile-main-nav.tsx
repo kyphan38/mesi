@@ -31,7 +31,7 @@ export function MobileMainNav() {
 
   return (
     <nav
-      className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/90 fixed right-0 bottom-0 left-0 z-50 border-t backdrop-blur md:hidden"
+      className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/90 fixed right-0 bottom-0 left-0 z-50 border-t backdrop-blur"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Điều hướng chính"
     >

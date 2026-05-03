@@ -8,7 +8,7 @@ export default function SettingsRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/profile#cai-dat");
+    router.replace("/profile#settings");
   }, [router]);
 
   return (

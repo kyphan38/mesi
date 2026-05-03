@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, History, Lightbulb } from "lucide-react";
+import { ArrowLeft, Droplets, History, Lightbulb, Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -17,20 +17,23 @@ import {
   scaleMacroTargetsByServings,
 } from "@/lib/constants/health-presets";
 import { buildHealthProfilePayload } from "@/lib/meal-plan/build-suggest-request";
-import { insulinSpikeAbbrev, insulinSpikeTextClass, sumDayTotals } from "@/lib/plan/day-insulin";
+import {
+  aggregateFromMeals,
+  insulinSpikeAbbrev,
+  insulinSpikeTextClass,
+  sumDayTotals,
+} from "@/lib/plan/day-insulin";
 import { setHomeComposeNewPlanActive } from "@/lib/plan/home-compose-new-flag";
 import { clearPlanDraft, readPlanDraft, type PlanDraftV1 } from "@/lib/plan/plan-draft";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
-import { evaluateDayNutrition } from "@/lib/nutrition/evaluate-day";
-import { primaryNutritionGoalKey } from "@/lib/meal-plan/nutrition-baseline";
 import {
   buildConfirmedPlanPayload,
   incrementIngredientsFromMeals,
   saveConfirmedPlan,
 } from "@/lib/db/meals";
 import { IngredientEditSheet } from "@/components/plan/ingredient-edit-sheet";
-import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
+import { InsulinMacroBadge, MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import { MealOptionCard } from "@/components/plan/meal-option-card";
 import { cn } from "@/lib/utils";
 
@@ -127,13 +130,8 @@ function PlanWizard({
   const [actionLoading, setActionLoading] = useState(false);
   const [moreLoading, setMoreLoading] = useState<ApiMealTime | null>(null);
   const [shopping, setShopping] = useState<{ suggestions: { ingredient: string; reason: string }[]; reassurance_note: string } | null>(null);
-  const [gapsDismissed, setGapsDismissed] = useState(false);
 
   const hp = useMemo(() => buildHealthProfilePayload(draft.profileSnapshot), [draft.profileSnapshot]);
-  const primaryGoal = useMemo(
-    () => primaryNutritionGoalKey(draft.profileSnapshot.nutritionGoalIds),
-    [draft.profileSnapshot.nutritionGoalIds],
-  );
 
   const selectedMeals = useMemo(() => {
     return apiSlots.map((s) => selectedBySlot[s]).filter((m): m is MealOption => m != null);
@@ -147,14 +145,16 @@ function PlanWizard({
     );
     return scaleMacroTargetsByPlannedMealSlots(householdDay, selectedMeals.length);
   }, [draft.profileSnapshot, draft.suggestRequest.servings, selectedMeals.length]);
-  const gaps = useMemo(
-    () => (selectedMeals.length > 0 ? evaluateDayNutrition(selectedMeals, primaryGoal) : null),
-    [selectedMeals, primaryGoal],
+  const dayInsulinAbbrev = useMemo(
+    () => (selectedMeals.length > 0 ? insulinSpikeAbbrev(aggregateFromMeals(selectedMeals)) : null),
+    [selectedMeals],
   );
+
   const highGlSlots = useMemo(() => {
     return apiSlots.filter((s) => selectedBySlot[s]?.glycemic_load === "high");
   }, [apiSlots, selectedBySlot]);
   const funFact = useMemo(() => randomFunFact(selectedMeals), [selectedMeals]);
+  const supplementReminderText = useMemo(() => supplementReminder(draft), [draft]);
 
   const allSelected = apiSlots.every((s) => selectedBySlot[s] != null);
 
@@ -363,8 +363,8 @@ function PlanWizard({
   };
 
   return (
-    <div className="bg-background min-h-0 flex-1 pb-24">
-      <header className="border-border sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur">
+    <div className="bg-background flex min-h-0 flex-1 flex-col">
+      <header className="border-border sticky top-0 z-10 flex shrink-0 items-center justify-between gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur">
         <Link
           href="/"
           className="text-muted-foreground hover:text-foreground inline-flex min-w-0 items-center gap-1 text-sm"
@@ -384,9 +384,8 @@ function PlanWizard({
         </Link>
       </header>
 
-      <div className="mx-auto w-full max-w-[430px] space-y-6 px-4 py-4">
-        {step === "options" ? (
-          <>
+      {step === "options" ? (
+        <div className="mx-auto min-h-0 w-full max-w-[430px] flex-1 space-y-6 overflow-y-auto px-4 py-4 pb-8">
             {apiSlots.map((slot) => (
               <section key={slot} className="space-y-3">
                 <h2 className="text-muted-foreground mb-3 text-sm font-medium tracking-wide uppercase">
@@ -434,42 +433,16 @@ function PlanWizard({
             >
               Xem tóm tắt
             </Button>
-          </>
-        ) : (
-          <>
-            {gaps?.has_gaps && !gapsDismissed ? (
-              <Card className="border-primary/40 bg-primary/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Gợi ý nhẹ</CardTitle>
-                  <CardDescription>
-                    So với mục tiêu hôm nay, bạn có thể điều chỉnh thêm - hoặc giữ nguyên nếu ổn.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      setStep("options");
-                      setGapsDismissed(false);
-                    }}
-                  >
-                    Điều chỉnh
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setGapsDismissed(true)}>
-                    Giữ nguyên
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <Card>
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-base font-medium leading-snug">Tóm tắt dinh dưỡng</CardTitle>
-                <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
-                  ~{Math.round(dayTotals.calories)} kcal đã lưu
-                </p>
+        </div>
+      ) : (
+        <>
+          <div className="mx-auto min-h-0 w-full max-w-[430px] flex-1 space-y-6 overflow-y-auto px-4 py-4 pb-36">
+            <Card className="rounded-2xl border-border">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                <CardTitle className="text-base font-medium leading-snug tracking-tight">Tóm tắt dinh dưỡng</CardTitle>
+                {dayInsulinAbbrev != null && dayInsulinAbbrev !== "" ? (
+                  <InsulinMacroBadge abbrev={dayInsulinAbbrev} />
+                ) : null}
               </CardHeader>
               <CardContent className="space-y-3">
                 <MacroProgressBars totals={dayTotals} targets={macroTargetsDay} mode="fullDayTargets" />
@@ -483,7 +456,7 @@ function PlanWizard({
             </Card>
 
             <div className="space-y-2">
-              <p className="text-foreground mt-2 mb-3 text-base font-medium">Từng bữa</p>
+              <p className="text-foreground mb-3 text-base font-semibold tracking-tight">Từng bữa</p>
               {apiSlots.map((slot) => {
                 const m = selectedBySlot[slot];
                 if (!m) return null;
@@ -492,7 +465,7 @@ function PlanWizard({
                     key={slot}
                     type="button"
                     onClick={() => openRecipe(slot)}
-                    className="border-border hover:bg-muted/50 mb-4 w-full rounded-lg border p-4 text-left last:mb-0"
+                    className="border-border bg-card hover:bg-muted/50 mb-4 w-full rounded-2xl border p-5 text-left shadow-sm last:mb-0"
                   >
                     <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                       {API_SLOT_VI[slot]}
@@ -507,58 +480,65 @@ function PlanWizard({
               })}
             </div>
 
-            {funFact ? (
-              <Card className="border-amber-500/30 bg-amber-500/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Lightbulb className="size-4 shrink-0 text-amber-600" />
-                    Có thể bạn chưa biết
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-muted-foreground text-sm italic">{funFact}</CardContent>
-              </Card>
-            ) : null}
-
-            <Card>
+            <Card className="rounded-2xl border-border">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Nhớ uống</CardTitle>
+                <CardTitle className="text-sm font-medium">Thói quen</CardTitle>
               </CardHeader>
-              <CardContent className="text-muted-foreground text-sm">{supplementReminder(draft)}</CardContent>
+              <CardContent className="text-muted-foreground space-y-4 text-sm">
+                {supplementReminderText.trim() ? (
+                  <p className="flex items-start gap-3">
+                    <div className="rounded-lg bg-purple-50 p-2 text-purple-500 dark:bg-purple-950/40 dark:text-purple-400">
+                      <Pill className="size-4" aria-hidden />
+                    </div>
+                    <span>{supplementReminderText}</span>
+                  </p>
+                ) : null}
+                <p className="flex items-start gap-3">
+                  <div className="rounded-lg bg-blue-50 p-2 text-blue-500 dark:bg-blue-950/40 dark:text-blue-400">
+                    <Droplets className="size-4" aria-hidden />
+                  </div>
+                  <span>
+                    <span className="text-foreground font-medium">Nước:</span> mục tiêu{" "}
+                    <span className="tabular-nums">{draft.profileSnapshot.waterTargetLiters}</span> L / ngày
+                  </span>
+                </p>
+              </CardContent>
             </Card>
 
-            <p className="text-muted-foreground text-center text-sm">
-              Mục tiêu nước hôm nay:{" "}
-              <span className="text-foreground font-medium">{draft.profileSnapshot.waterTargetLiters} L</span>
-            </p>
+            {funFact ? (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-5 dark:border-amber-900/40 dark:bg-amber-950/25">
+                <div className="flex gap-3">
+                  <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-500 dark:text-amber-400" aria-hidden />
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-foreground text-sm font-medium">Có thể bạn chưa biết</p>
+                    <p className="text-muted-foreground text-sm italic">{funFact}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {shopping ? (
-              <Card>
+              <Card className="rounded-2xl border-border">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Nếu tiện, mua thêm</CardTitle>
-                  <CardDescription>{shopping.reassurance_note}</CardDescription>
+                  <CardTitle className="text-sm font-medium">Gợi ý mua thêm</CardTitle>
+                  {shopping.reassurance_note.trim() ? (
+                    <CardDescription className="text-xs">{shopping.reassurance_note}</CardDescription>
+                  ) : null}
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <ul className="text-muted-foreground list-inside list-disc space-y-1">
+                <CardContent className="text-sm">
+                  <ul className="text-foreground list-inside list-disc space-y-1">
                     {shopping.suggestions.map((s, i) => (
-                      <li key={i}>
-                        <span className="text-foreground">{s.ingredient}</span> - {s.reason}
-                      </li>
+                      <li key={i}>{s.ingredient}</li>
                     ))}
                   </ul>
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setStep("options")}>
-                      OK, chỉnh món
-                    </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => {}}>
-                      Nấu với những gì có
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             ) : null}
+          </div>
 
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setStep("options")}>
+          <div className="border-border bg-background/90 supports-[backdrop-filter]:bg-background/90 fixed right-0 bottom-[var(--bottom-nav-height,4rem)] left-0 z-40 px-4 py-3 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.06)] backdrop-blur-md dark:shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.25)]">
+            <div className="mx-auto flex max-w-[430px] gap-2">
+              <Button type="button" variant="outline" className="min-h-12 flex-1" onClick={() => setStep("options")}>
                 Quay lại
               </Button>
               <Button
@@ -570,9 +550,9 @@ function PlanWizard({
                 {actionLoading ? "Đang lưu…" : "Xác nhận thực đơn"}
               </Button>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       <IngredientEditSheet
         key={

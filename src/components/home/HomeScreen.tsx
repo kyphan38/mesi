@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { History, Plus, Shuffle, User, X } from "lucide-react";
+import { Plus, RefreshCw, X } from "lucide-react";
 import { AddIngredientSheet } from "@/components/home/AddIngredientSheet";
 import { TodayPlanView } from "@/components/home/TodayPlanView";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -74,12 +74,6 @@ const EFFORT_SELECT_LABEL: Record<Effort, string> = {
   quick: "Nhanh (<15p)",
   medium: "Vừa (15–30p)",
   high: "Kỳ công (>30p)",
-};
-
-const SLOT_EMOJI: Record<MealSlot, string> = {
-  morning: "☀️",
-  afternoon: "🌤️",
-  evening: "🌙",
 };
 
 const RANDOM_FALLBACK_IDS = ["egg", "chicken_breast", "tomato", "rice", "spinach"] as const;
@@ -674,9 +668,14 @@ export function HomeScreen() {
   if (!homeHeadReady) {
     return (
       <div className="bg-background flex min-h-0 flex-1 flex-col">
-        <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
-          <span className="text-foreground text-xl font-medium leading-tight">Mesi</span>
-          <div className="w-20" />
+        <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center border-b px-4 py-3 backdrop-blur">
+          <Link
+            href="/"
+            className="text-foreground text-xl font-semibold leading-tight tracking-tight"
+            aria-label="Trang chủ"
+          >
+            Mesi
+          </Link>
         </header>
         <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">Đang tải…</div>
       </div>
@@ -686,24 +685,14 @@ export function HomeScreen() {
   if (showTodaySummary && todayPlanDoc && homeProfile) {
     return (
       <div className="bg-background flex min-h-0 flex-1 flex-col">
-        <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
-          <span className="text-foreground text-xl font-medium leading-tight">Mesi</span>
-          <div className="flex items-center gap-1">
-            <Link
-              href="/history"
-              className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
-              aria-label="Lịch sử"
-            >
-              <History className="size-5" />
-            </Link>
-            <Link
-              href="/profile#cai-dat"
-              className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
-              aria-label="Hồ sơ và cài đặt"
-            >
-              <User className="size-5" />
-            </Link>
-          </div>
+        <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center border-b px-4 py-3 backdrop-blur">
+          <Link
+            href="/"
+            className="text-foreground text-xl font-semibold leading-tight tracking-tight"
+            aria-label="Trang chủ"
+          >
+            Mesi
+          </Link>
         </header>
         <RatingPromptBanner
           doc={ratingDoc}
@@ -714,6 +703,7 @@ export function HomeScreen() {
         <TodayPlanView
           plan={todayPlanDoc}
           healthProfile={homeProfile}
+          onPlanUpdated={() => void refreshTodayPlan()}
           onReplacedPlan={() => {
             setHomeComposeNewPlanActive(true);
             setFormOverride(true);
@@ -760,24 +750,14 @@ export function HomeScreen() {
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col">
-      <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-between border-b px-4 py-3 backdrop-blur">
-        <span className="text-foreground text-xl font-medium leading-tight">Mesi</span>
-        <div className="flex items-center gap-1">
-          <Link
-            href="/history"
-            className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
-            aria-label="Lịch sử"
-          >
-            <History className="size-5" />
-          </Link>
-          <Link
-            href="/profile#cai-dat"
-            className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg"
-            aria-label="Hồ sơ và cài đặt"
-          >
-            <User className="size-5" />
-          </Link>
-        </div>
+      <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center border-b px-4 py-3 backdrop-blur">
+        <Link
+          href="/"
+          className="text-foreground text-xl font-semibold leading-tight tracking-tight"
+          aria-label="Trang chủ"
+        >
+          Mesi
+        </Link>
       </header>
 
       <div
@@ -856,7 +836,7 @@ export function HomeScreen() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-foreground mb-2 text-base font-medium">Số người ăn</h2>
+            <h2 className="text-foreground mb-2 text-base font-semibold">Số người ăn</h2>
             <div className="flex flex-wrap gap-2">
               {(["1", "2", "3"] as const).map((n) => (
                 <button
@@ -864,7 +844,7 @@ export function HomeScreen() {
                   type="button"
                   onClick={() => setDinerPreset(n)}
                   className={cn(
-                    "min-h-11 min-w-[3.5rem] rounded-xl border px-3 text-sm font-medium",
+                    "min-h-11 min-w-[3.5rem] rounded-xl border px-3 text-sm font-normal",
                     dinerPreset === n
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border bg-card",
@@ -877,7 +857,7 @@ export function HomeScreen() {
                 type="button"
                 onClick={() => setDinerPreset("other")}
                 className={cn(
-                  "min-h-11 rounded-xl border px-3 text-sm font-medium",
+                  "min-h-11 rounded-xl border px-3 text-sm font-normal",
                   dinerPreset === "other"
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card",
@@ -897,23 +877,22 @@ export function HomeScreen() {
                 aria-label="Số người (nhập tay)"
               />
             ) : null}
-            <p className="text-muted-foreground mt-1 text-xs tabular-nums" aria-live="polite">
-              Tổng: {effectiveDiners} người ăn
-            </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-foreground mb-2 text-base font-medium">Lên plan cho buổi nào?</h2>
+            <h2 className="text-foreground mb-2 text-base font-normal">Lên plan cho buổi nào?</h2>
             {SLOTS.map((slot) => {
               const isPlanned = plannedUiSlots.has(slot);
               const canToggle = !isPlanned || replanSlots.has(slot);
               const plannedName = todayPlanDoc?.data.slots[uiSlotToApiTime(slot)]?.meal.name;
+              const plannedLocked = Boolean(isPlanned && plannedName && !replanSlots.has(slot));
+              const showEffortSelect = mealOn[slot] && !plannedLocked;
               return (
-              <div key={slot} className="border-border rounded-xl border p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div key={slot} className="border-border bg-card rounded-2xl border p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
                   <label
                     className={cn(
-                      "flex items-center gap-3",
+                      "flex min-w-0 flex-1 items-center gap-3",
                       canToggle ? "cursor-pointer" : "cursor-default",
                     )}
                   >
@@ -922,38 +901,39 @@ export function HomeScreen() {
                       checked={mealOn[slot]}
                       onChange={() => toggleMeal(slot)}
                       disabled={!canToggle}
-                      className="border-input size-5 rounded disabled:opacity-50"
+                      className="border-input size-5 shrink-0 rounded disabled:opacity-50"
                     />
                     <span
                       className={cn(
-                        "text-sm font-medium",
+                        "text-sm font-normal",
                         isPlanned && !replanSlots.has(slot)
                           ? "text-muted-foreground"
                           : "text-foreground",
                       )}
                     >
-                      {SLOT_EMOJI[slot]} {MEAL_LABELS[slot]}
+                      {MEAL_LABELS[slot]}
                     </span>
                   </label>
-                  {isPlanned && plannedName && !replanSlots.has(slot) ? (
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                      <span className="text-muted-foreground text-xs">✓ {plannedName}</span>
-                      <button
-                        type="button"
-                        onClick={() => enableReplan(slot)}
-                        className="text-primary text-xs font-medium hover:underline"
-                      >
-                        Plan lại
-                      </button>
-                    </div>
+                  {plannedLocked ? (
+                    <button
+                      type="button"
+                      onClick={() => enableReplan(slot)}
+                      className="text-muted-foreground hover:text-teal-600 active:text-teal-700 active:scale-95 shrink-0 transition-all p-2 -m-2"
+                      aria-label={`Đổi món ${MEAL_LABELS[slot]}`}
+                    >
+                      <RefreshCw className="size-4" aria-hidden />
+                    </button>
                   ) : null}
                 </div>
-                {mealOn[slot] ? (
+                {plannedLocked && plannedName ? (
+                  <p className="text-foreground mt-2 text-base font-normal leading-snug">{plannedName}</p>
+                ) : null}
+                {showEffortSelect ? (
                   <div className="mt-2 w-full min-w-0">
                     <select
                       value={effort[slot]}
                       onChange={(e) => setEffortFor(slot, e.target.value as Effort)}
-                      aria-label={`Mức nấu ${SLOT_EMOJI[slot]} ${MEAL_LABELS[slot]}`}
+                      aria-label={`Mức nấu ${MEAL_LABELS[slot]}`}
                       className="border-input bg-background text-foreground focus-visible:ring-ring h-11 min-h-11 w-full min-w-0 rounded-lg border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
                     >
                       {EFFORT_OPTIONS.map((o) => (
@@ -970,7 +950,7 @@ export function HomeScreen() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-foreground mb-2 text-base font-medium">Nhà đang có gì?</h2>
+            <h2 className="text-foreground mb-2 text-base font-normal">Nhà đang có gì?</h2>
 
             {visibleCategories.map((cat) => {
               const rows = orderCategoryRows(cat.presets, customItems[cat.id], topIds);
@@ -982,7 +962,7 @@ export function HomeScreen() {
                     <button
                       type="button"
                       onClick={() => openAddSheet(cat.id)}
-                      className="border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary inline-flex min-h-10 items-center gap-1 rounded-full border border-dashed px-3 py-1.5 text-sm transition-colors"
+                      className="border-muted-foreground/40 text-muted-foreground hover:border-teal-500/50 hover:text-teal-600 inline-flex min-h-10 items-center gap-1 rounded-full border border-dashed px-3 py-1.5 text-sm transition-colors"
                       aria-label={`Thêm nguyên liệu vào ${cat.label}`}
                     >
                       <Plus className="size-3.5 shrink-0" aria-hidden />
@@ -997,7 +977,7 @@ export function HomeScreen() {
               <button
                 type="button"
                 onClick={() => openAddSheet("other")}
-                className="text-muted-foreground hover:text-primary mt-1 inline-flex items-center gap-1.5 text-sm transition-colors"
+                className="text-muted-foreground hover:text-teal-600 mt-1 inline-flex items-center gap-1.5 text-sm transition-colors"
               >
                 <Plus className="size-4 shrink-0" aria-hidden />
                 Thêm nguyên liệu khác
@@ -1036,7 +1016,7 @@ export function HomeScreen() {
 
       <div
         className={cn(
-          "border-border bg-background/95 supports-[backdrop-filter]:bg-background/85 mx-auto w-full max-w-[430px] border-t px-4 pt-3 pb-2 backdrop-blur-sm",
+          "border-border bg-background/90 supports-[backdrop-filter]:bg-background/90 mx-auto w-full max-w-[430px] p-4 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.06)] backdrop-blur-md dark:shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.25)]",
           "max-md:fixed max-md:right-0 max-md:left-0 max-md:z-40 max-md:bottom-[var(--bottom-nav-height,4rem)]",
           "md:relative md:z-10 md:shrink-0",
         )}
@@ -1061,9 +1041,8 @@ export function HomeScreen() {
               type="button"
               disabled={ctaBusy || loadingRandom}
               onClick={() => void runRandomPlan()}
-              className="text-muted-foreground hover:text-primary mt-2 w-full text-center text-sm transition-colors disabled:opacity-50"
+              className="text-muted-foreground hover:text-teal-600 mt-3 w-full text-center text-sm transition-colors disabled:opacity-50"
             >
-              <Shuffle className="mr-1 inline size-3.5 align-text-bottom" aria-hidden />
               {loadingRandom ? "Đang chọn ngẫu nhiên…" : "hoặc random cho tôi"}
             </button>
           ) : null}

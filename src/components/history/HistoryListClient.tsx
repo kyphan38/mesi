@@ -3,24 +3,19 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, History as HistoryIcon, SmilePlus, Trash2, UtensilsCrossed } from "lucide-react";
+import { SmilePlus, UtensilsCrossed } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ApiMealTime } from "@/lib/ai/types/meal-api";
-import { deleteConfirmedMeal, listConfirmedMealsForHistory, type MealDocWithId } from "@/lib/db/meals";
+import { listConfirmedMealsForHistory, type MealDocWithId } from "@/lib/db/meals";
 import { getUserFriendlyFirestoreMessage } from "@/lib/db/firestore-errors";
 import { buildHistoryListItems, type HistoryListItem } from "@/lib/history/group-history";
 import { formatDateKeyVi } from "@/lib/locale/vi-date";
+import { aggregateFromMeals, insulinSpikeAbbrev } from "@/lib/plan/day-insulin";
 import { API_SLOT_VI } from "@/lib/plan/slot-labels";
 
-function slotChips(slots: MealDocWithId["data"]["slots"]): string[] {
-  const out: string[] = [];
-  for (const k of Object.keys(slots) as ApiMealTime[]) {
-    if (slots[k]?.meal) out.push(API_SLOT_VI[k]);
-  }
-  return out;
-}
+const SLOT_ORDER: ApiMealTime[] = ["morning", "lunch", "dinner"];
 
 function ratingLabel(r: MealDocWithId["data"]["rating"]): string | null {
   if (r === "good") return "Ngon";
@@ -43,10 +38,6 @@ function HistoryCardSkeleton() {
         <div className="bg-muted mt-2 h-4 w-32 animate-pulse rounded-md" />
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
-        <div className="flex gap-2">
-          <div className="bg-muted h-6 w-14 animate-pulse rounded-full" />
-          <div className="bg-muted h-6 w-14 animate-pulse rounded-full" />
-        </div>
         <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
       </CardContent>
     </Card>
@@ -74,22 +65,6 @@ export function HistoryListClient() {
     }
   }, []);
 
-  const deleteEntry = useCallback(
-    async (docId: string) => {
-      const ok =
-        typeof window !== "undefined" && window.confirm("Xóa mục này khỏi lịch sử? Không thể hoàn tác.");
-      if (!ok) return;
-      try {
-        await deleteConfirmedMeal(docId);
-        await refresh();
-      } catch (e) {
-        console.error(e);
-        setLoadError(getUserFriendlyFirestoreMessage(e));
-      }
-    },
-    [refresh],
-  );
-
   useEffect(() => {
     startTransition(() => {
       void refresh();
@@ -106,20 +81,8 @@ export function HistoryListClient() {
 
   return (
     <div className="bg-background min-h-0 flex-1">
-      <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex items-center justify-between border-b px-4 py-3 backdrop-blur">
-        <Link
-          href="/"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm font-medium"
-          aria-label="Về trang chủ"
-        >
-          <ArrowLeft className="size-5 shrink-0" aria-hidden />
-          Trang chủ
-        </Link>
-        <span className="text-foreground inline-flex items-center gap-1 text-xl font-medium leading-tight">
-          <HistoryIcon className="size-5" />
-          Lịch sử
-        </span>
-        <span className="w-12" />
+      <header className="border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 flex shrink-0 items-center justify-center border-b px-4 py-3 backdrop-blur">
+        <span className="text-foreground text-xl font-medium leading-tight">Lịch sử</span>
       </header>
 
       <div className="mx-auto w-full max-w-[430px] space-y-4 px-4 py-4 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
@@ -136,8 +99,7 @@ export function HistoryListClient() {
         ) : null}
 
         {showFilterRow ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-muted-foreground text-xs">Đánh dấu “ngon” để Mesi học khẩu vị.</p>
+          <div className="flex justify-end">
             <Button
               type="button"
               variant={onlyGood ? "default" : "outline"}
@@ -190,60 +152,51 @@ export function HistoryListClient() {
             {filtered.map((item) => {
               if (item.kind === "single") {
                 const d = item.doc;
-                const cal = d.data.dayTotals?.calories;
+                const dt = d.data.dayTotals;
+                const meals = Object.values(d.data.slots)
+                  .map((s) => s?.meal)
+                  .filter((m): m is NonNullable<typeof m> => m != null);
+                const insulin = aggregateFromMeals(meals);
+                const iAbbrev = insulinSpikeAbbrev(insulin);
+                const macroLine =
+                  dt != null ? (
+                    <span className="text-muted-foreground">
+                      ~{Math.round(dt.calories)} kcal · P {Math.round(dt.protein_g)} · C {Math.round(dt.carb_g)} · F{" "}
+                      {Math.round(dt.fat_g)} · I {iAbbrev}
+                    </span>
+                  ) : null;
                 return (
-                  <div key={d.id} className="flex items-stretch gap-2">
-                    <Link href={`/history/${d.id}`} className="min-w-0 flex-1">
-                      <Card className="hover:bg-muted/30 h-full transition-colors duration-150">
-                        <CardHeader className="pb-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                          <CardTitle className="text-sm font-medium leading-snug">
-                                {formatDateKeyVi(d.data.dateKey)}
-                              </CardTitle>
-                          <CardDescription className="mt-1 flex flex-wrap items-center gap-1.5 text-sm tabular-nums text-muted-foreground">
-                                {typeof cal === "number" ? <span>~{Math.round(cal)} kcal</span> : null}
-                              </CardDescription>
-                            </div>
-                            {ratingLabel(d.data.rating) ? (
-                              <span className="text-muted-foreground text-xs">{ratingLabel(d.data.rating)}</span>
-                            ) : null}
+                  <Link key={d.id} href={`/history/${d.id}`} className="block">
+                    <Card className="hover:bg-muted/30 transition-colors duration-150">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <CardTitle className="text-sm font-medium leading-snug">
+                              {formatDateKeyVi(d.data.dateKey)}
+                            </CardTitle>
+                            <CardDescription className="mt-1 text-xs leading-snug tabular-nums">
+                              {macroLine}
+                            </CardDescription>
                           </div>
-                        </CardHeader>
-                        <CardContent className="space-y-2 pt-0 text-sm">
-                          <div className="flex flex-wrap gap-1">
-                            {slotChips(d.data.slots).map((c) => (
-                              <span
-                                key={c}
-                                className="border-border text-muted-foreground rounded-full border px-2 py-0.5 text-xs font-medium"
-                              >
-                                {c}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-foreground line-clamp-2 text-base font-medium leading-snug">
-                            {Object.values(d.data.slots)
-                              .map((s) => s?.meal.name)
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="text-muted-foreground active:bg-destructive/10 active:text-destructive h-11 w-11 shrink-0 self-center"
-                      aria-label="Xóa khỏi lịch sử"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        void deleteEntry(d.id);
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
+                          {ratingLabel(d.data.rating) ? (
+                            <span className="text-muted-foreground shrink-0 text-xs">{ratingLabel(d.data.rating)}</span>
+                          ) : null}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-1.5 pt-0 text-sm">
+                        {SLOT_ORDER.map((slot) => {
+                          const name = d.data.slots[slot]?.meal?.name?.trim();
+                          if (!name) return null;
+                          return (
+                            <p key={slot} className="text-foreground leading-snug">
+                              <span className="text-muted-foreground font-medium">{API_SLOT_VI[slot]}:</span>{" "}
+                              <span className="line-clamp-2">{name}</span>
+                            </p>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  </Link>
                 );
               }
 

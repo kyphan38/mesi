@@ -2,6 +2,7 @@
 
 import {
   deleteDoc,
+  deleteField,
   getDoc,
   getDocs,
   limit,
@@ -30,6 +31,8 @@ export type ConfirmedSlotEntry = {
   is_reheated?: boolean;
   /** Set when slot is saved (merge or first write). */
   confirmedAt?: number;
+  /** User marked this meal as eaten (execution check-in). */
+  eatenAt?: number;
 };
 
 export type ConfirmedPlanDoc = {
@@ -124,7 +127,8 @@ export async function saveConfirmedPlan(incoming: ConfirmedPlanDoc): Promise<str
     for (const t of API_SLOT_ORDER) {
       const v = patch[t];
       if (!v) continue;
-      out[t] = { ...v, confirmedAt: now };
+      const prev = base[t];
+      out[t] = { ...prev, ...v, confirmedAt: now };
     }
     return out;
   };
@@ -359,6 +363,19 @@ export async function updateMealRating(docId: string, rating: MealRating): Promi
   await updateDoc(ref, {
     rating,
     ratedAt: Date.now(),
+  } as DocumentData);
+}
+
+/** Mark a planned meal slot as eaten or clear the flag (Firestore meals/{docId}). */
+export async function updateSlotEatenAt(
+  docId: string,
+  slot: ApiMealTime,
+  eaten: boolean,
+): Promise<void> {
+  const ref = userDocRef("meals", docId);
+  await updateDoc(ref, {
+    [`slots.${slot}.eatenAt`]: eaten ? Date.now() : deleteField(),
+    updatedAt: Date.now(),
   } as DocumentData);
 }
 

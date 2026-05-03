@@ -25,10 +25,10 @@ export function MealOptionCard({
     >
       <Card
         className={cn(
-          "rounded-lg transition-colors",
+          "rounded-2xl transition-colors",
           selected
             ? "border-primary bg-primary/5 ring-primary ring-2 dark:bg-primary/10"
-            : "border-border bg-background hover:bg-muted/40",
+            : "border-border bg-card hover:bg-muted/40",
         )}
       >
         <div className="space-y-1.5 p-4">

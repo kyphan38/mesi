@@ -17,10 +17,20 @@ const ROWS: {
   unit: "kcal" | "g";
 }[] = [
   { key: "calories", label: "Calo", color: "bg-primary", unit: "kcal" },
-  { key: "protein_g", label: "Protein", color: "bg-teal-500", unit: "g" },
+  { key: "protein_g", label: "Protein", color: "bg-emerald-700", unit: "g" },
   { key: "carb_g", label: "Carb", color: "bg-amber-500", unit: "g" },
   { key: "fat_g", label: "Fat", color: "bg-rose-400", unit: "g" },
 ];
+
+/** Renders in the nutrition summary card header, aligned with the card title. */
+export function InsulinMacroBadge({ abbrev }: { abbrev: string }) {
+  if (!abbrev.trim()) return null;
+  return (
+    <span className="bg-primary/10 text-primary inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums">
+      Insulin · {abbrev}
+    </span>
+  );
+}
 
 export function MacroProgressBars({
   totals,
@@ -35,12 +45,12 @@ export function MacroProgressBars({
 }) {
   if (mode === "totalsOnly") {
     return (
-      <div className={cn("divide-y divide-border/50", className)}>
+      <div className={cn("space-y-4", className)}>
         {ROWS.map(({ key, label, unit }) => {
           const current = totals[key];
           const valueStr = unit === "kcal" ? `${Math.round(current)} kcal` : `${Math.round(current)}g`;
           return (
-            <div key={key} className="flex justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0">
+            <div key={key} className="flex justify-between gap-3 text-sm">
               <span className="font-normal text-muted-foreground">{label}</span>
               <span className="text-foreground text-right font-medium tabular-nums">{valueStr}</span>
             </div>
@@ -51,7 +61,7 @@ export function MacroProgressBars({
   }
 
   return (
-    <div className={cn("divide-y divide-border/50", className)}>
+    <div className={cn("space-y-4", className)}>
       {ROWS.map(({ key, label, color, unit }) => {
         const current = totals[key];
         const target = Math.max(1, targets[key]);
@@ -64,7 +74,7 @@ export function MacroProgressBars({
             : `${Math.round(current)}/${Math.round(target)}g`;
 
         return (
-          <div key={key} className="space-y-1 py-2 first:pt-0 last:pb-0">
+          <div key={key} className="space-y-1">
             <div className="flex justify-between gap-3 text-sm">
               <span className="font-normal text-muted-foreground">{label}</span>
               <span

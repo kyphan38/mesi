@@ -186,8 +186,9 @@ export function buildShoppingSuggestSystemInstruction(hp: HealthProfilePayload):
     buildCoreHealthSystemInstruction(hp, 1) +
     [
       "NHIỆM VỤ: Gợi ý 2–3 nguyên liệu nên mua thêm để bữa đủ chất (không vi phạm avoid).",
-      "Giải thích ngắn tại sao (VD đủ protein buổi tối).",
-      "Nếu bữa đã đủ chất, reassurance_note nêu rõ \"Không mua cũng OK, bữa ăn vẫn ổn\" hoặc tương đương.",
+      "ingredient: chỉ tên ngắn (≤5 chữ/tên nhóm), không mô tả dài.",
+      "reason: tối đa một cụm ngắn ≤15 ký tự hoặc để trống — KHÔNG giải thích dinh dưỡng dài.",
+      "Nếu bữa đã đủ chất, reassurance_note một câu ngắn (vd \"Không mua cũng OK\").",
       'Root JSON: { "suggestions": [ { "ingredient", "reason" } ], "reassurance_note": string }.',
       "Tối đa 3 suggestions (có thể 2).",
     ].join("\n")

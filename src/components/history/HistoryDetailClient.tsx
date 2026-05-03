@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Droplets, Pill } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -18,8 +18,9 @@ import {
   scaleMacroTargetsByPlannedMealSlots,
   scaleMacroTargetsByServings,
 } from "@/lib/constants/health-presets";
+import { aggregateFromMeals, insulinSpikeAbbrev } from "@/lib/plan/day-insulin";
 import { stripLeadingStepNumber } from "@/lib/plan/recipe-step";
-import { MacroProgressBars } from "@/components/plan/macro-progress-bars";
+import { InsulinMacroBadge, MacroProgressBars } from "@/components/plan/macro-progress-bars";
 import { MealIngredientsCollapsible } from "@/components/plan/meal-ingredients-list";
 import type { HealthProfileDoc } from "@/types/health-profile";
 
@@ -68,6 +69,14 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
     const householdDay = scaleMacroTargetsByServings(resolved, servings);
     return scaleMacroTargetsByPlannedMealSlots(householdDay, plannedSlotCount);
   }, [healthProfile, row, plannedSlotCount]);
+
+  const insulinAbbrev = useMemo(() => {
+    if (!row) return null;
+    const meals = ALL_API_SLOTS.map((t) => row.data.slots[t]?.meal).filter(
+      (m): m is NonNullable<typeof m> => m != null,
+    );
+    return meals.length > 0 ? insulinSpikeAbbrev(aggregateFromMeals(meals)) : null;
+  }, [row]);
 
   const cookAgain = () => {
     if (!row) return;
@@ -149,29 +158,29 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
           </Button>
         </div>
 
-        <Card>
-          <CardHeader className="space-y-1 pb-2">
-            <p className="text-muted-foreground text-sm font-normal">{formatDateKeyVi(d.dateKey)}</p>
-            <CardTitle className="text-base font-medium leading-snug">Tóm tắt dinh dưỡng</CardTitle>
-            <p className="text-foreground mt-1 text-2xl font-medium tabular-nums">
-              ~{Math.round(d.dayTotals.calories)} kcal đã lưu
-            </p>
+        <Card className="rounded-2xl border-border">
+          <CardHeader className="space-y-2 pb-2">
+            <p className="text-muted-foreground text-sm font-normal tabular-nums">{formatDateKeyVi(d.dateKey)}</p>
+            <div className="flex flex-row flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <CardTitle className="text-base font-medium leading-snug tracking-tight">Tóm tắt dinh dưỡng</CardTitle>
+              {insulinAbbrev != null && insulinAbbrev !== "" ? <InsulinMacroBadge abbrev={insulinAbbrev} /> : null}
+            </div>
           </CardHeader>
           <CardContent>
             <MacroProgressBars totals={d.dayTotals} targets={macroTargetsDay} mode="fullDayTargets" />
           </CardContent>
         </Card>
 
-        <div className="space-y-3">
-          <p className="text-foreground text-base font-medium">Các bữa</p>
-          <div className="space-y-3">
+        <div className="space-y-4">
+          <p className="text-foreground text-base font-semibold tracking-tight">Các bữa</p>
+          <div className="space-y-4">
             {ALL_API_SLOTS.map((slot) => {
               const entry = d.slots[slot];
               if (!entry?.meal) return null;
               return (
                 <div
                   key={slot}
-                  className="border-border rounded-lg border px-4 py-4"
+                  className="border-border bg-card rounded-2xl border p-5 shadow-sm"
                 >
                   <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                     {API_SLOT_VI[slot]}
@@ -205,6 +214,31 @@ export function HistoryDetailClient({ docId }: { docId: string }) {
             })}
           </div>
         </div>
+
+        <Card className="rounded-2xl border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Thói quen</CardTitle>
+          </CardHeader>
+          <CardContent className="text-muted-foreground space-y-4 text-sm">
+            {d.supplementReminder?.trim() ? (
+              <p className="flex items-start gap-3">
+                <div className="rounded-lg bg-purple-50 p-2 text-purple-500 dark:bg-purple-950/40 dark:text-purple-400">
+                  <Pill className="size-4" aria-hidden />
+                </div>
+                <span>{d.supplementReminder}</span>
+              </p>
+            ) : null}
+            <p className="flex items-start gap-3">
+              <div className="rounded-lg bg-blue-50 p-2 text-blue-500 dark:bg-blue-950/40 dark:text-blue-400">
+                <Droplets className="size-4" aria-hidden />
+              </div>
+              <span>
+                <span className="text-foreground font-medium">Nước:</span> mục tiêu{" "}
+                <span className="tabular-nums">{d.waterTargetLiters}</span> L / ngày
+              </span>
+            </p>
+          </CardContent>
+        </Card>
 
         {d.shoppingNote ? (
           <Card>

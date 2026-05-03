@@ -13,6 +13,7 @@ import {
   AVOID_FOOD_PRESETS,
   getSupplementPreset,
   NUTRITION_GOALS,
+  resolveMacroTargets,
   SUPPLEMENT_PRESETS,
 } from "@/lib/constants/health-presets";
 import { getFirebaseAuth } from "@/lib/auth/firebase-client";
@@ -22,7 +23,7 @@ import {
   saveHealthProfile,
 } from "@/lib/db/firestore";
 import { getUserFriendlyFirestoreMessage } from "@/lib/db/firestore-errors";
-import type { HealthProfileDoc, SupplementEntry } from "@/types/health-profile";
+import type { HealthProfileDoc, MacroTargets, SupplementEntry } from "@/types/health-profile";
 
 const WATER_MIN = 1.5;
 const WATER_MAX = 4;
@@ -37,6 +38,19 @@ function clampWaterLiters(v: number): number {
   const snapped = Math.round((v - WATER_MIN) / WATER_STEP) * WATER_STEP + WATER_MIN;
   const x = Math.round(snapped * 10) / 10;
   return Math.min(WATER_MAX, Math.max(WATER_MIN, x));
+}
+
+function macroTargetsValidInput(m: MacroTargets): boolean {
+  return (
+    Number.isFinite(m.calories) &&
+    m.calories > 0 &&
+    Number.isFinite(m.protein_g) &&
+    m.protein_g >= 0 &&
+    Number.isFinite(m.carb_g) &&
+    m.carb_g >= 0 &&
+    Number.isFinite(m.fat_g) &&
+    m.fat_g >= 0
+  );
 }
 
 export type HealthProfileFormProps = {
@@ -70,6 +84,9 @@ export function HealthProfileForm({
   const [waterLiters, setWaterLiters] = useState(2);
   const [waterOtherOpen, setWaterOtherOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [macroTargets, setMacroTargets] = useState<MacroTargets>(() =>
+    resolveMacroTargets(getDefaultHealthProfile()),
+  );
 
   const applyDoc = useCallback((doc: HealthProfileDoc) => {
     setExistingSetupAt(doc.setupCompletedAt);
@@ -98,6 +115,7 @@ export function HealthProfileForm({
     }
     setPresetSuppIds(presets);
     setCustomSupps(customs);
+    setMacroTargets(resolveMacroTargets(doc));
   }, []);
 
   useEffect(() => {
@@ -190,6 +208,10 @@ export function HealthProfileForm({
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!macroTargetsValidInput(macroTargets)) {
+      show("Nhập calo > 0 và P/C/F ≥ 0.", "error");
+      return;
+    }
     setSaving(true);
     try {
       const now = Date.now();
@@ -205,6 +227,12 @@ export function HealthProfileForm({
         customNutritionLabels: customNutritionLabels,
         supplements: buildSupplements(),
         waterTargetLiters: clampWaterLiters(waterLiters),
+        macroTargets: {
+          calories: Math.round(macroTargets.calories),
+          protein_g: Math.round(macroTargets.protein_g),
+          carb_g: Math.round(macroTargets.carb_g),
+          fat_g: Math.round(macroTargets.fat_g),
+        },
       };
       await saveHealthProfile(doc);
       setExistingSetupAt(doc.setupCompletedAt);
@@ -245,7 +273,7 @@ export function HealthProfileForm({
   return (
     <>
       <form
-        id="cai-dat"
+        id="settings"
         onSubmit={(e) => void onSubmit(e)}
         className="mx-auto w-full max-w-lg space-y-8 px-4 py-6"
       >
@@ -292,7 +320,7 @@ export function HealthProfileForm({
         </Alert>
       ) : null}
 
-      <section className="space-y-3">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-foreground text-base font-medium">Thực phẩm cần tránh</h2>
         <div className="flex flex-wrap gap-2">
           {AVOID_FOOD_PRESETS.map((p) => (
@@ -345,7 +373,7 @@ export function HealthProfileForm({
         ) : null}
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-foreground text-base font-medium">Mục tiêu dinh dưỡng</h2>
         <p className="text-muted-foreground text-xs">Chọn một hoặc nhiều mục tiêu có sẵn.</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -399,7 +427,84 @@ export function HealthProfileForm({
         ) : null}
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="text-foreground text-base font-medium">Chỉ số mục tiêu / ngày</h2>
+        <p className="text-muted-foreground text-xs">
+          Calo và macro (một người / ngày). Dùng cho thực đơn và thanh tiến độ.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">Calo (kcal)</p>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              className="min-h-11 text-base tabular-nums sm:min-h-8"
+              value={macroTargets.calories}
+              onChange={(e) =>
+                setMacroTargets((prev) => ({
+                  ...prev,
+                  calories: Number.parseFloat(e.target.value) || 0,
+                }))
+              }
+              aria-label="Mục tiêu calo kcal"
+            />
+          </div>
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">Protein (g)</p>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              className="min-h-11 text-base tabular-nums sm:min-h-8"
+              value={macroTargets.protein_g}
+              onChange={(e) =>
+                setMacroTargets((prev) => ({
+                  ...prev,
+                  protein_g: Number.parseFloat(e.target.value) || 0,
+                }))
+              }
+              aria-label="Mục tiêu protein gam"
+            />
+          </div>
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">Carb (g)</p>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              className="min-h-11 text-base tabular-nums sm:min-h-8"
+              value={macroTargets.carb_g}
+              onChange={(e) =>
+                setMacroTargets((prev) => ({
+                  ...prev,
+                  carb_g: Number.parseFloat(e.target.value) || 0,
+                }))
+              }
+              aria-label="Mục tiêu carb gam"
+            />
+          </div>
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">Chất béo (g)</p>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              className="min-h-11 text-base tabular-nums sm:min-h-8"
+              value={macroTargets.fat_g}
+              onChange={(e) =>
+                setMacroTargets((prev) => ({
+                  ...prev,
+                  fat_g: Number.parseFloat(e.target.value) || 0,
+                }))
+              }
+              aria-label="Mục tiêu chất béo gam"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-foreground text-base font-medium">Supplement đang dùng</h2>
         <p className="text-muted-foreground text-xs">
           Chọn bổ sung - thời điểm uống sẽ được gợi ý trên màn hình thực đơn.
@@ -456,7 +561,7 @@ export function HealthProfileForm({
         ) : null}
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-foreground text-base font-medium">Lượng nước mục tiêu / ngày</h2>
         <div className="flex flex-wrap items-center gap-2">
           {WATER_QUICK_PRESETS.map((v) => (
@@ -499,7 +604,6 @@ export function HealthProfileForm({
             />
           </div>
         ) : null}
-        <p className="text-foreground text-sm font-medium tabular-nums">Đang chọn: {waterLiters.toFixed(1)} L</p>
       </section>
 
         <Button type="submit" className="min-h-12 w-full text-base sm:min-h-9" disabled={saving}>
@@ -507,16 +611,15 @@ export function HealthProfileForm({
         </Button>
       </form>
 
-      <div className="border-border mx-auto mt-12 w-full max-w-lg border-t px-4 pt-8 pb-10">
-        <Button
+      <div className="mx-auto mt-8 w-full max-w-lg px-4 pb-10">
+        <button
           type="button"
-          variant="destructive"
-          className="min-h-12 w-full text-base"
+          className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 w-full text-center text-sm font-medium disabled:opacity-50"
           disabled={loggingOut}
           onClick={() => void handleLogout()}
         >
-          {loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
-        </Button>
+          {loggingOut ? "Đang đăng xuất…" : "Đăng xuất khỏi Mesi"}
+        </button>
       </div>
     </>
   );
