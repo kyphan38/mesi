@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Nguyên liệu / thiếu — dùng chung Today + History (dữ liệu đã có trong MealOption). */
+/** Nguyên liệu / thiếu - dùng chung Today + History (dữ liệu đã có trong MealOption). */
 export function MealIngredientsList({
   ingredients,
   missingIngredients,
