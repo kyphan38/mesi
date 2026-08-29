@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="10" fill="oklch(0.94 0.045 180)"/><path d="M20 9c-4 6-8 10.5-8 15.5a8 8 0 1016 0c0-5-4-9.5-8-15.5z" stroke="oklch(0.46 0.13 180)" stroke-width="2" stroke-linejoin="round" fill="oklch(0.46 0.13 180 / 0.15)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" role="img" aria-label="mesi">
+  <rect width="128" height="128" rx="30" fill="#0d9488"/>
+  <g transform="translate(22 22) scale(3.5)" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 11.5h15a7.5 7.5 0 0 1-15 0z"/>
+    <path d="M9 5.5v2.6"/>
+    <path d="M12 4.4v3.7"/>
+    <path d="M15 5.5v2.6"/>
+  </g>
+</svg>
