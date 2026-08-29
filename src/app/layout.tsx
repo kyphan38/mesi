@@ -20,7 +20,7 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Mesi",
+  title: "mesi",
   description: "Meal planning - simple.",
   icons: {
     icon: "/favicon.svg",
